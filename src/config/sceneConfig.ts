@@ -2,11 +2,8 @@
 
 // 디바이스 성능에 따른 파티클 수 조절
 export function getParticleMultiplier(): number {
-  if (typeof window === 'undefined') return 1;
-
   const isMobile = window.innerWidth < 768;
-  const isLowEnd = typeof navigator !== 'undefined' &&
-    navigator.hardwareConcurrency !== undefined &&
+  const isLowEnd = navigator.hardwareConcurrency !== undefined &&
     navigator.hardwareConcurrency <= 4;
 
   if (isMobile) return 0.5;
@@ -29,20 +26,20 @@ export interface ShapeData {
 
 // 도형 정의
 export const shapes: ShapeData[] = [
-  { id: 0, geometry: 'box', color: '#4f46e5', animation: 'left-to-center', pointCount: 3000 },
-  { id: 1, geometry: 'torus', color: '#ec4899', animation: 'scatter-to-form', pointCount: 4000 },
-  { id: 2, geometry: 'sphere', color: '#22c55e', animation: 'left-to-center', pointCount: 5000 },
-  { id: 3, geometry: 'octahedron', color: '#f59e0b', animation: 'zoom-through', pointCount: 3000 },
-  { id: 4, geometry: 'cone', color: '#06b6d4', animation: 'curve-zoom', pointCount: 3500 },
+  { id: 0, geometry: 'box', color: '#ffffff', animation: 'left-to-center', pointCount: 3000 },
+  { id: 1, geometry: 'torus', color: '#ffffff', animation: 'scatter-to-form', pointCount: 4000 },
+  { id: 2, geometry: 'sphere', color: '#ffffff', animation: 'left-to-center', pointCount: 5000 },
+  { id: 3, geometry: 'octahedron', color: '#ffffff', animation: 'zoom-through', pointCount: 3000 },
+  { id: 4, geometry: 'cone', color: '#ffffff', animation: 'curve-zoom', pointCount: 3500 },
 ];
 
 // IntroShapes 설정
 export const introShapesConfig = [
-  { geometry: 'box' as const, color: '#4f46e5', pointCount: 1500, initialPos: [0, 0, 0] as [number, number, number] },
-  { geometry: 'torus' as const, color: '#ec4899', pointCount: 2000, initialPos: [1.5, 0.8, -0.5] as [number, number, number] },
-  { geometry: 'sphere' as const, color: '#22c55e', pointCount: 2500, initialPos: [-1.5, -0.3, 0.3] as [number, number, number] },
-  { geometry: 'octahedron' as const, color: '#f59e0b', pointCount: 1500, initialPos: [0.8, -1, 0.5] as [number, number, number] },
-  { geometry: 'cone' as const, color: '#06b6d4', pointCount: 1800, initialPos: [-1, 1, -0.3] as [number, number, number] },
+  { geometry: 'box' as const, color: '#ffffff', pointCount: 1500, initialPos: [0, 0, 0] as [number, number, number] },
+  { geometry: 'torus' as const, color: '#ffffff', pointCount: 2000, initialPos: [1.5, 0.8, -0.5] as [number, number, number] },
+  { geometry: 'sphere' as const, color: '#ffffff', pointCount: 2500, initialPos: [-1.5, -0.3, 0.3] as [number, number, number] },
+  { geometry: 'octahedron' as const, color: '#ffffff', pointCount: 1500, initialPos: [0.8, -1, 0.5] as [number, number, number] },
+  { geometry: 'cone' as const, color: '#ffffff', pointCount: 1800, initialPos: [-1, 1, -0.3] as [number, number, number] },
 ];
 
 // 애니메이션별 대기 위치

@@ -5,7 +5,6 @@ export function createShapePoints(geometry: string, count: number): Float32Array
 
   switch (geometry) {
     case 'box': {
-      // 정육면체 표면에 점 분포
       for (let i = 0; i < count; i++) {
         const face = Math.floor(Math.random() * 6);
         const u = Math.random() - 0.5;
@@ -23,7 +22,6 @@ export function createShapePoints(geometry: string, count: number): Float32Array
       break;
     }
     case 'sphere': {
-      // 구 표면에 균일 분포 (피보나치)
       for (let i = 0; i < count; i++) {
         const phi = Math.acos(1 - 2 * (i + 0.5) / count);
         const theta = Math.PI * (1 + Math.sqrt(5)) * i;
@@ -36,9 +34,8 @@ export function createShapePoints(geometry: string, count: number): Float32Array
       break;
     }
     case 'torus': {
-      // 토러스 표면에 점 분포
-      const R = 0.5; // 메인 반지름
-      const r = 0.2; // 튜브 반지름
+      const R = 0.5;
+      const r = 0.2;
 
       for (let i = 0; i < count; i++) {
         const u = Math.random() * Math.PI * 2;
@@ -51,22 +48,18 @@ export function createShapePoints(geometry: string, count: number): Float32Array
       break;
     }
     case 'octahedron': {
-      // 팔면체 표면에 점 분포
       for (let i = 0; i < count; i++) {
-        // 랜덤하게 8개 면 중 하나 선택
         const face = Math.floor(Math.random() * 8);
         const u = Math.random();
         const v = Math.random() * (1 - u);
         const w = 1 - u - v;
 
-        // 팔면체 꼭지점
         const vertices = [
           [0, 0.6, 0], [0, -0.6, 0],
           [0.6, 0, 0], [-0.6, 0, 0],
           [0, 0, 0.6], [0, 0, -0.6]
         ];
 
-        // 각 면의 3개 꼭지점
         const faceIndices = [
           [0, 2, 4], [0, 4, 3], [0, 3, 5], [0, 5, 2],
           [1, 4, 2], [1, 3, 4], [1, 5, 3], [1, 2, 5]
@@ -80,22 +73,19 @@ export function createShapePoints(geometry: string, count: number): Float32Array
       break;
     }
     case 'cone': {
-      // 원뿔 표면에 점 분포
       const height = 0.8;
       const radius = 0.4;
 
       for (let i = 0; i < count; i++) {
-        const isBase = Math.random() < 0.3; // 30% 확률로 밑면
+        const isBase = Math.random() < 0.3;
 
         if (isBase) {
-          // 밑면 (원)
           const r = Math.sqrt(Math.random()) * radius;
           const theta = Math.random() * Math.PI * 2;
           positions[i * 3] = r * Math.cos(theta);
           positions[i * 3 + 1] = -height / 2;
           positions[i * 3 + 2] = r * Math.sin(theta);
         } else {
-          // 옆면
           const h = Math.random();
           const currentRadius = radius * (1 - h);
           const theta = Math.random() * Math.PI * 2;
@@ -107,7 +97,6 @@ export function createShapePoints(geometry: string, count: number): Float32Array
       break;
     }
     default: {
-      // 기본값: 구
       for (let i = 0; i < count; i++) {
         const phi = Math.acos(1 - 2 * (i + 0.5) / count);
         const theta = Math.PI * (1 + Math.sqrt(5)) * i;
@@ -121,7 +110,6 @@ export function createShapePoints(geometry: string, count: number): Float32Array
   return positions;
 }
 
-// 토러스 점 생성 (ScatterToForm용)
 export function createTorusPoints(count: number, R: number, r: number): Float32Array {
   const positions = new Float32Array(count * 3);
 
@@ -136,7 +124,6 @@ export function createTorusPoints(count: number, R: number, r: number): Float32A
   return positions;
 }
 
-// 흩어진 위치 생성 (ScatterToForm용)
 export function createScatteredPositions(
   count: number,
   range: { x: number; y: number; z: number },
@@ -153,7 +140,6 @@ export function createScatteredPositions(
   return positions;
 }
 
-// 배경 파티클 위치 생성
 export function createBackgroundParticles(
   count: number,
   spread: { x: number; y: number; z: number },
