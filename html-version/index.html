@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Homepage</title>
+  <meta name="description" content="Interactive 3D homepage with scroll animations">
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <!-- 3D Canvas Container -->
+  <div id="canvas-container"></div>
+
+  <!-- Hero Section -->
+  <section class="section section-hero">
+    <div class="section-content text-center">
+      <h1 class="hero-title">Welcome</h1>
+      <p class="hero-subtitle">스크롤하여 3D 오브젝트 여행을 시작하세요</p>
+      <div class="scroll-hint">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 14l-7 7m0 0l-7-7m7 7V3"/>
+        </svg>
+      </div>
+    </div>
+  </section>
+
+  <!-- Spacer for scatter animation -->
+  <section class="section-spacer"></section>
+
+  <!-- Shape Sections -->
+  <section class="section section-shape" data-index="0" data-color="#4f46e5">
+    <div class="section-content text-center shape-info">
+      <div class="shape-badge" style="background-color: rgba(79, 70, 229, 0.2); color: #4f46e5;">01</div>
+      <h2 class="shape-title">Cube</h2>
+      <p class="shape-description">기본적인 3D 형태의 시작점</p>
+    </div>
+  </section>
+
+  <section class="section section-shape" data-index="1" data-color="#ec4899">
+    <div class="section-content text-center shape-info">
+      <div class="shape-badge" style="background-color: rgba(236, 72, 153, 0.2); color: #ec4899;">02</div>
+      <h2 class="shape-title">Torus</h2>
+      <p class="shape-description">무한의 순환을 상징하는 도넛 형태</p>
+    </div>
+  </section>
+
+  <section class="section section-shape" data-index="2" data-color="#22c55e">
+    <div class="section-content text-center shape-info">
+      <div class="shape-badge" style="background-color: rgba(34, 197, 94, 0.2); color: #22c55e;">03</div>
+      <h2 class="shape-title">Sphere</h2>
+      <p class="shape-description">완벽한 균형과 조화의 구체</p>
+    </div>
+  </section>
+
+  <section class="section section-shape" data-index="3" data-color="#f59e0b">
+    <div class="section-content text-center shape-info">
+      <div class="shape-badge" style="background-color: rgba(245, 158, 11, 0.2); color: #f59e0b;">04</div>
+      <h2 class="shape-title">Octahedron</h2>
+      <p class="shape-description">다이아몬드처럼 빛나는 팔면체</p>
+    </div>
+  </section>
+
+  <section class="section section-shape" data-index="4" data-color="#06b6d4">
+    <div class="section-content text-center shape-info">
+      <div class="shape-badge" style="background-color: rgba(6, 182, 212, 0.2); color: #06b6d4;">05</div>
+      <h2 class="shape-title">Cone</h2>
+      <p class="shape-description">정점을 향해 수렴하는 원뿔</p>
+    </div>
+  </section>
+
+  <section class="section section-shape" data-index="5" data-color="#22c55e">
+    <div class="section-content text-center shape-info">
+      <div class="shape-badge" style="background-color: rgba(34, 197, 94, 0.2); color: #22c55e;">06</div>
+      <h2 class="shape-title">Earth</h2>
+      <p class="shape-description">CCUS - 전 세계 탄소 포집의 여정</p>
+    </div>
+  </section>
+
+  <!-- Final Section -->
+  <section class="section section-final">
+    <div class="section-content text-center">
+      <h2 class="final-title">Explore More</h2>
+      <p class="final-subtitle">3D 웹의 무한한 가능성을 경험하세요</p>
+      <div class="button-group">
+        <button class="btn btn-primary">Get Started</button>
+        <button class="btn btn-secondary">Learn More</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Scroll Progress Indicator -->
+  <div class="scroll-indicator">
+    <div class="scroll-track">
+      <div class="scroll-fill" id="scroll-fill"></div>
+    </div>
+    <span class="scroll-percent" id="scroll-percent">0%</span>
+  </div>
+
+  <!-- Three.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- GLB/GLTF 로더 및 표면 샘플러 -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/math/MeshSurfaceSampler.js"></script>
+
+  <!-- Custom Scripts -->
+  <script src="js/shapes.js"></script>
+  <script src="js/scene.js"></script>
+  <script src="js/scroll.js"></script>
+</body>
+</html>
