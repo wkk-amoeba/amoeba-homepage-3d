@@ -19,10 +19,14 @@
 
 # production
 /build
+/dist
 
 # misc
 .DS_Store
 *.pem
+
+# claude code
+.claude/settings.local.json
 
 # debug
 npm-debug.log*
