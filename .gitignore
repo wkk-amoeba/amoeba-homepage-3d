@@ -24,9 +24,23 @@
 # misc
 .DS_Store
 *.pem
+Thumbs.db
 
-# claude code
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# claude code (local settings only)
 .claude/settings.local.json
+.claude/*.local.*
+
+# local environment
+*.local
+.env.local
+.env.*.local
 
 # debug
 npm-debug.log*
