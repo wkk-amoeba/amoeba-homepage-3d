@@ -1,3 +1,5 @@
+import { scrollConfig } from '../config/sceneConfig';
+
 export type ScrollListener = (progress: number) => void;
 
 class ScrollManager {
@@ -51,9 +53,22 @@ class ScrollManager {
   }
 
   getCurrentSection(): number {
-    if (this.progress < 0.2) return -1;
-    const sectionProgress = (this.progress - 0.2) / 0.8;
-    return Math.min(4, Math.floor(sectionProgress * 5));
+    const { sectionStart, sectionGap, sectionDuration, modelCount } = scrollConfig;
+
+    // 인트로 구간이면 -1 반환
+    if (this.progress < sectionStart) return -1;
+
+    // 각 섹션의 중간 지점을 기준으로 현재 섹션 계산
+    for (let i = 0; i < modelCount; i++) {
+      const start = sectionStart + i * sectionGap;
+      const end = start + sectionDuration;
+
+      if (this.progress >= start && this.progress <= end) {
+        return i;
+      }
+    }
+
+    return -1;
   }
 
   getProgress(): number {

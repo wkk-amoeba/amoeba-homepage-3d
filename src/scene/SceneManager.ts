@@ -1,10 +1,9 @@
 import * as THREE from 'three';
 import { scrollManager } from '../utils/scrollManager';
 import { ParticleBackground } from './ParticleBackground';
-import { IntroShapes } from './IntroShapes';
-import { PointShape } from './shapes/PointShape';
-import { ScatterShape } from './shapes/ScatterShape';
-import { shapes } from '../config/sceneConfig';
+import { ScrollHintParticles } from './ScrollHintParticles';
+import { ModelShape } from './shapes/ModelShape';
+import { models } from '../config/sceneConfig';
 
 export class SceneManager {
   private scene: THREE.Scene;
@@ -13,8 +12,8 @@ export class SceneManager {
   private container: HTMLElement;
 
   private background: ParticleBackground;
-  private introShapes: IntroShapes;
-  private shapeObjects: (PointShape | ScatterShape)[] = [];
+  private scrollHint: ScrollHintParticles;
+  private modelObjects: ModelShape[] = [];
 
   private lastTime = 0;
   private animationId: number | null = null;
@@ -52,8 +51,8 @@ export class SceneManager {
 
     // Create objects
     this.background = new ParticleBackground(this.scene);
-    this.introShapes = new IntroShapes(this.scene);
-    this.createShapes();
+    this.scrollHint = new ScrollHintParticles(this.scene);
+    this.createModels();
 
     // Event listeners
     window.addEventListener('resize', this.handleResize.bind(this));
@@ -75,15 +74,10 @@ export class SceneManager {
     this.scene.add(pointLight);
   }
 
-  private createShapes() {
-    shapes.forEach((shapeData, index) => {
-      if (shapeData.animation === 'scatter-to-form') {
-        const shape = new ScatterShape(this.scene, shapeData, index);
-        this.shapeObjects.push(shape);
-      } else {
-        const shape = new PointShape(this.scene, shapeData, index);
-        this.shapeObjects.push(shape);
-      }
+  private createModels() {
+    models.forEach((modelData, index) => {
+      const model = new ModelShape(this.scene, modelData, index);
+      this.modelObjects.push(model);
     });
   }
 
@@ -112,8 +106,8 @@ export class SceneManager {
 
     // Update all objects
     this.background.update(delta);
-    this.introShapes.update(delta, scrollProgress);
-    this.shapeObjects.forEach(shape => shape.update(delta, scrollProgress));
+    this.scrollHint.update(delta, scrollProgress);
+    this.modelObjects.forEach(model => model.update(delta, scrollProgress));
 
     this.renderer.render(this.scene, this.camera);
   }
@@ -124,6 +118,11 @@ export class SceneManager {
     }
     window.removeEventListener('resize', this.handleResize);
     scrollManager.destroy();
+
+    // Dispose models
+    this.scrollHint.dispose();
+    this.modelObjects.forEach(model => model.dispose());
+
     this.renderer.dispose();
     this.container.removeChild(this.renderer.domElement);
   }
