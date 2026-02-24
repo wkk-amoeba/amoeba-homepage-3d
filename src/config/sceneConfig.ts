@@ -53,11 +53,11 @@ export interface ModelData {
 // 모든 모델은 로딩 시 2 유닛으로 정규화됨 → scale은 미세 조정용
 export const models: ModelData[] = [
   { id: 0, name: 'Fighter Plane', modelPath: '/models/axis_fighter_plane.glb', scale: 1.0, animation: 'left-to-center' },
-  { id: 1, name: 'Henchman', modelPath: '/models/HenchmanTough.glb', scale: 1.0, animation: 'scatter-to-form' },
-  { id: 2, name: 'Syringe Gun', modelPath: '/models/syringe_gun_-_game_ready_asset.glb', scale: 1.0, animation: 'right-to-center' },
-  { id: 3, name: 'Porsche 911', modelPath: '/models/porsche_911_carrera_4s.glb', scale: 1.0, animation: 'zoom-through' },
+  { id: 1, name: 'Henchman', modelPath: '/models/HenchmanTough.glb', scale: 0.85, animation: 'scatter-to-form' },
+  { id: 2, name: 'Syringe Gun', modelPath: '/models/syringe_gun_-_game_ready_asset.glb', scale: 0.85, animation: 'right-to-center' },
+  { id: 3, name: 'Porsche 911', modelPath: '/models/porsche_911_carrera_4s.glb', scale: 0.9, animation: 'zoom-through' },
   { id: 4, name: 'BMW M2', modelPath: '/models/bmw_m2_performance_parts.glb', scale: 1.0, animation: 'curve-zoom' },
-  { id: 5, name: 'GAZ69', modelPath: '/models/GAZ69_FAB.glb', scale: 1.0, animation: 'left-to-center' },
+  { id: 5, name: 'GAZ69', modelPath: '/models/GAZ69_FAB.glb', scale: 0.85, animation: 'left-to-center' },
 ];
 
 // IntroShapes용 모델 설정
