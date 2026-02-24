@@ -112,6 +112,10 @@ export class SceneManager {
     this.renderer.render(this.scene, this.camera);
   }
 
+  getModels(): ModelShape[] {
+    return this.modelObjects;
+  }
+
   destroy() {
     if (this.animationId !== null) {
       cancelAnimationFrame(this.animationId);

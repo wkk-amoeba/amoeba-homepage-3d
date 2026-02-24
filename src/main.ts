@@ -6,6 +6,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const sceneManager = new SceneManager('canvas-container');
   sceneManager.start();
 
+  // Dev-only debug panel (tree-shaken in production)
+  if (import.meta.env.DEV) {
+    import('./debug/DebugPanel').then(({ DebugPanel }) => {
+      new DebugPanel(sceneManager);
+    });
+  }
+
   // Cleanup on page unload
   window.addEventListener('beforeunload', () => {
     sceneManager.destroy();

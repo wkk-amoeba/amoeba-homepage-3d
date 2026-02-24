@@ -13,6 +13,11 @@ export class ModelShape {
   private tempPosition = new THREE.Vector3();
   private tempScale = new THREE.Vector3();
 
+  // Debug panel support
+  private _totalParticleCount = 0;
+  private _visibleParticleCount = 0;
+  private _userScale = 1.0;
+
   constructor(scene: THREE.Scene, data: ModelData, sectionIndex: number) {
     this.scene = scene;
     this.data = data;
@@ -22,6 +27,42 @@ export class ModelShape {
 
     this.loadModel();
   }
+
+  // --- Debug panel accessors ---
+
+  get name(): string {
+    return this.data.name;
+  }
+
+  get configScale(): number {
+    return this.data.scale;
+  }
+
+  get totalParticleCount(): number {
+    return this._totalParticleCount;
+  }
+
+  get visibleParticleCount(): number {
+    return this._visibleParticleCount;
+  }
+
+  set visibleParticleCount(count: number) {
+    const clamped = Math.max(100, Math.min(count, this._totalParticleCount));
+    this._visibleParticleCount = clamped;
+    if (this.points) {
+      this.points.geometry.setDrawRange(0, clamped);
+    }
+  }
+
+  get userScale(): number {
+    return this._userScale;
+  }
+
+  set userScale(value: number) {
+    this._userScale = value;
+  }
+
+  // --- End debug panel accessors ---
 
   private async loadModel() {
     try {
@@ -36,35 +77,25 @@ export class ModelShape {
       }
 
       const arrayBuffer = await response.arrayBuffer();
-      const fullPositions = new Float32Array(arrayBuffer);
-      const totalVertexCount = fullPositions.length / 3;
+      const positions = new Float32Array(arrayBuffer);
+      this._totalParticleCount = positions.length / 3;
 
-      if (totalVertexCount === 0) {
+      if (this._totalParticleCount === 0) {
         console.error(`No vertices in pre-extracted file: ${this.data.name}`);
         return;
       }
 
-      // Device-based sub-sampling
-      const multiplier = getParticleMultiplier();
-      let positions: Float32Array;
-
-      if (multiplier < 1.0) {
-        const targetCount = Math.floor(totalVertexCount * multiplier);
-        const step = Math.max(1, Math.ceil(totalVertexCount / targetCount));
-        const sampled: number[] = [];
-        for (let i = 0; i < totalVertexCount; i++) {
-          if (i % step === 0) {
-            const base = i * 3;
-            sampled.push(fullPositions[base], fullPositions[base + 1], fullPositions[base + 2]);
-          }
-        }
-        positions = new Float32Array(sampled);
+      // Determine visible particle count
+      if (this.data.particleCount !== undefined) {
+        this._visibleParticleCount = Math.min(this.data.particleCount, this._totalParticleCount);
       } else {
-        positions = fullPositions;
+        const multiplier = getParticleMultiplier();
+        this._visibleParticleCount = Math.floor(this._totalParticleCount * multiplier);
       }
 
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geometry.setDrawRange(0, this._visibleParticleCount);
 
       // Normalize to 8 units (.bin is centered but not size-normalized)
       geometry.computeBoundingBox();
@@ -105,7 +136,7 @@ export class ModelShape {
       this.scene.add(this.points);
       this.loaded = true;
 
-      console.log(`Loaded: ${this.data.name} (${positions.length / 3} vertices from pre-extracted ${totalVertexCount})`);
+      console.log(`Loaded: ${this.data.name} (${this._visibleParticleCount}/${this._totalParticleCount} vertices)`);
     } catch (error) {
       console.error(`Error loading ${this.data.name}:`, error);
     }
@@ -182,7 +213,7 @@ export class ModelShape {
 
     const positions = this.getAnimationPositions();
     let targetPosition: [number, number, number] = positions.wait;
-    let targetScale = 1;
+    let targetScale = 1 * this._userScale;
     let targetOpacity = 0;
 
     const { enterRatio, holdRatio } = animationPhases;

@@ -46,6 +46,7 @@ export interface ModelData {
   modelPath: string;
   scale: number;
   animation: 'left-to-center' | 'right-to-center' | 'zoom-through' | 'curve-zoom' | 'scatter-to-form';
+  particleCount?: number; // 모델별 파티클 수 고정값 (미지정 시 디바이스 기반 자동 결정)
 }
 
 // 3D 모델 정의 (GLB 파일)
