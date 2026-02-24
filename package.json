@@ -4,8 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "prebuild": "node scripts/extract-vertices.mjs",
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "npm run prebuild && tsc && vite build",
     "preview": "vite preview",
     "lint": "eslint"
   },

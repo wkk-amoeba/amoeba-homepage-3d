@@ -1,6 +1,4 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { getCircleTexture } from '../utils/circleTexture';
 import { introModelsConfig, scrollConfig, scatterDirections, getParticleMultiplier, PERFORMANCE_CONFIG } from '../config/sceneConfig';
 
@@ -22,15 +20,7 @@ export class IntroModels {
   }
 
   private loadModels() {
-    const loader = new GLTFLoader();
-
-    // Set up Draco decoder for compressed models
-    const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.6/');
-    loader.setDRACOLoader(dracoLoader);
-
     introModelsConfig.forEach((config, index) => {
-      // Create placeholder - will be replaced when model loads
       const placeholder: LoadedModel = {
         points: new THREE.Points(),
         initialPos: config.initialPos,
@@ -38,104 +28,85 @@ export class IntroModels {
       };
       this.models.push(placeholder);
 
-      loader.load(
-        config.modelPath,
-        (gltf) => {
-          // Extract vertices from all meshes
-          const allVertices: number[] = [];
-
-          // First pass: count total vertices
-          let totalVertexCount = 0;
-          gltf.scene.traverse((child) => {
-            if (child instanceof THREE.Mesh && child.geometry) {
-              const posAttr = child.geometry.getAttribute('position');
-              if (posAttr) totalVertexCount += posAttr.count;
-            }
-          });
-
-          if (totalVertexCount === 0) {
-            console.error(`No vertices found in intro model: ${index}`);
-            return;
-          }
-
-          // Calculate sampling step based on max vertices limit
-          const maxVertices = PERFORMANCE_CONFIG.maxVerticesPerModel;
-          const multiplier = getParticleMultiplier();
-          const targetCount = Math.min(maxVertices, totalVertexCount);
-          const finalCount = Math.floor(targetCount * multiplier);
-          const step = Math.max(1, Math.ceil(totalVertexCount / finalCount));
-
-          // Second pass: sample vertices uniformly
-          let vertexIndex = 0;
-          gltf.scene.traverse((child) => {
-            if (child instanceof THREE.Mesh && child.geometry) {
-              const geometry = child.geometry;
-              const positionAttribute = geometry.getAttribute('position');
-
-              if (positionAttribute) {
-                child.updateMatrixWorld(true);
-                const worldMatrix = child.matrixWorld;
-
-                const vertex = new THREE.Vector3();
-                for (let i = 0; i < positionAttribute.count; i++) {
-                  if (vertexIndex % step === 0) {
-                    vertex.fromBufferAttribute(positionAttribute, i);
-                    vertex.applyMatrix4(worldMatrix);
-                    allVertices.push(vertex.x, vertex.y, vertex.z);
-                  }
-                  vertexIndex++;
-                }
-              }
-            }
-          });
-
-          const positions = new Float32Array(allVertices);
-
-          // Create point cloud geometry
-          const geometry = new THREE.BufferGeometry();
-          geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-          // Apply model scale
-          const scale = config.scale * 0.6;
-          geometry.scale(scale, scale, scale);
-
-          // Center the geometry
-          geometry.computeBoundingBox();
-          if (geometry.boundingBox) {
-            const center = new THREE.Vector3();
-            geometry.boundingBox.getCenter(center);
-            geometry.translate(-center.x, -center.y, -center.z);
-          }
-
-          const material = new THREE.PointsMaterial({
-            transparent: true,
-            color: 0xffffff,
-            size: 0.02,
-            sizeAttenuation: true,
-            depthWrite: false,
-            opacity: 1,
-            map: getCircleTexture(),
-            alphaMap: getCircleTexture(),
-          });
-
-          const points = new THREE.Points(geometry, material);
-          points.frustumCulled = PERFORMANCE_CONFIG.enableFrustumCulling;
-          points.position.set(...config.initialPos);
-
-          this.scene.add(points);
-
-          // Update the placeholder
-          placeholder.points = points;
-          placeholder.loaded = true;
-
-          console.log(`Intro model loaded: ${index} (${positions.length / 3} vertices, sampled from ${totalVertexCount})`);
-        },
-        undefined,
-        (error) => {
-          console.error(`Error loading intro model ${index}:`, error);
-        }
-      );
+      this.loadSingleModel(config, index, placeholder);
     });
+  }
+
+  private async loadSingleModel(
+    config: typeof introModelsConfig[number],
+    index: number,
+    placeholder: LoadedModel,
+  ) {
+    try {
+      // Derive .bin path from .glb path
+      const binPath = config.modelPath
+        .replace('/models/', '/models/vertices/')
+        .replace('.glb', '.bin');
+
+      const response = await fetch(binPath);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch ${binPath}: ${response.status}`);
+      }
+
+      const arrayBuffer = await response.arrayBuffer();
+      const fullPositions = new Float32Array(arrayBuffer);
+      const totalVertexCount = fullPositions.length / 3;
+
+      if (totalVertexCount === 0) {
+        console.error(`No vertices in pre-extracted intro model: ${index}`);
+        return;
+      }
+
+      // Device-based sub-sampling
+      const multiplier = getParticleMultiplier();
+      let positions: Float32Array;
+
+      if (multiplier < 1.0) {
+        const targetCount = Math.floor(totalVertexCount * multiplier);
+        const step = Math.max(1, Math.ceil(totalVertexCount / targetCount));
+        const sampled: number[] = [];
+        for (let i = 0; i < totalVertexCount; i++) {
+          if (i % step === 0) {
+            const base = i * 3;
+            sampled.push(fullPositions[base], fullPositions[base + 1], fullPositions[base + 2]);
+          }
+        }
+        positions = new Float32Array(sampled);
+      } else {
+        positions = fullPositions;
+      }
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+      // Apply model scale (.bin is already centered at origin)
+      const scale = config.scale * 0.6;
+      geometry.scale(scale, scale, scale);
+
+      const material = new THREE.PointsMaterial({
+        transparent: true,
+        color: 0xffffff,
+        size: 0.02,
+        sizeAttenuation: true,
+        depthWrite: false,
+        opacity: 1,
+        map: getCircleTexture(),
+        alphaMap: getCircleTexture(),
+      });
+
+      const points = new THREE.Points(geometry, material);
+      points.frustumCulled = PERFORMANCE_CONFIG.enableFrustumCulling;
+      points.position.set(...config.initialPos);
+
+      this.scene.add(points);
+
+      placeholder.points = points;
+      placeholder.loaded = true;
+
+      console.log(`Intro model loaded: ${index} (${positions.length / 3} vertices from pre-extracted ${totalVertexCount})`);
+    } catch (error) {
+      console.error(`Error loading intro model ${index}:`, error);
+    }
   }
 
   update(delta: number, scrollProgress: number) {
