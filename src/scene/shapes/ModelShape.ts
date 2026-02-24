@@ -85,17 +85,30 @@ export class ModelShape {
         return;
       }
 
-      // Determine visible particle count
-      if (this.data.particleCount !== undefined) {
-        this._visibleParticleCount = Math.min(this.data.particleCount, this._totalParticleCount);
+      // Uniform sub-sampling for lower-end devices (preserves shape across all body parts)
+      const multiplier = this.data.particleCount !== undefined
+        ? Math.min(this.data.particleCount, this._totalParticleCount) / this._totalParticleCount
+        : getParticleMultiplier();
+
+      let sampledPositions: Float32Array;
+      if (multiplier < 1.0) {
+        const targetCount = Math.floor(this._totalParticleCount * multiplier);
+        const step = Math.max(1, Math.ceil(this._totalParticleCount / targetCount));
+        const sampled: number[] = [];
+        for (let i = 0; i < this._totalParticleCount; i++) {
+          if (i % step === 0) {
+            const base = i * 3;
+            sampled.push(positions[base], positions[base + 1], positions[base + 2]);
+          }
+        }
+        sampledPositions = new Float32Array(sampled);
       } else {
-        const multiplier = getParticleMultiplier();
-        this._visibleParticleCount = Math.floor(this._totalParticleCount * multiplier);
+        sampledPositions = positions;
       }
+      this._visibleParticleCount = sampledPositions.length / 3;
 
       const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-      geometry.setDrawRange(0, this._visibleParticleCount);
+      geometry.setAttribute('position', new THREE.BufferAttribute(sampledPositions, 3));
 
       // Normalize to 8 units (.bin is centered but not size-normalized)
       geometry.computeBoundingBox();
