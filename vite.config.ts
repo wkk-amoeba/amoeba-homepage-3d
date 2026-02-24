@@ -1,6 +1,9 @@
 import { defineConfig } from 'vite';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  define: {
+    __DEBUG_PANEL__: mode === 'development',
+  },
   build: {
     target: 'esnext',
     minify: 'esbuild',
@@ -16,4 +19,4 @@ export default defineConfig({
     port: 3000,
     open: true,
   },
-});
+}));

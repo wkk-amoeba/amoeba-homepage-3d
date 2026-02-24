@@ -6,8 +6,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const sceneManager = new SceneManager('canvas-container');
   sceneManager.start();
 
-  // Dev-only debug panel (tree-shaken in production)
-  if (import.meta.env.DEV) {
+  // Debug panel: enabled in dev mode and build:debug (tree-shaken in production build)
+  if (__DEBUG_PANEL__) {
     import('./debug/DebugPanel').then(({ DebugPanel }) => {
       new DebugPanel(sceneManager);
     });
