@@ -471,6 +471,17 @@ export class ModelShape {
     const damping = particleConfig.springDamping;
     const clampedDelta = Math.min(delta, 0.033); // cap at ~30fps to prevent spring explosion
 
+    // Compute camera view direction in local space (once, before particle loop)
+    // Camera looks down -Z in world; transform to local space via inverse object rotation
+    let camDirLocalX = 0, camDirLocalY = 0, camDirLocalZ = -1;
+    if (localMousePos && activeObject) {
+      const invQ = activeObject.quaternion.clone().invert();
+      const camDir = new THREE.Vector3(0, 0, -1).applyQuaternion(invQ);
+      camDirLocalX = camDir.x;
+      camDirLocalY = camDir.y;
+      camDirLocalZ = camDir.z;
+    }
+
     for (let i = 0; i < this.particleCount; i++) {
       const i3 = i * 3;
 
@@ -478,7 +489,7 @@ export class ModelShape {
       const y = this.originalPositions[i3 + 1] + this.scatterOffsets[i3 + 1] * scatterAmount;
       const z = this.originalPositions[i3 + 2] + this.scatterOffsets[i3 + 2] * scatterAmount;
 
-      // Compute bulge target: dome-shaped push toward camera (+Z)
+      // Compute repulsion target using perpendicular distance to camera ray
       let targetX = 0, targetY = 0, targetZ = 0;
       let hasTarget = false;
 
@@ -487,43 +498,37 @@ export class ModelShape {
         const origY = this.originalPositions[i3 + 1];
         const origZ = this.originalPositions[i3 + 2];
 
-        // Camera at world Z=8, object at world Z=2, adjusted for object scale
-        const camLocalZ = 6 / this._userScale;
+        // Vector from mouse to particle in local space
+        const dx = origX - localMousePos.x;
+        const dy = origY - localMousePos.y;
+        const dz = origZ - localMousePos.z;
 
-        // Perspective-correct dome check: project particle onto the mouse's Z plane
-        const perspScale = camLocalZ / Math.max(0.5, camLocalZ - origZ);
-        const projX = origX * perspScale;
-        const projY = origY * perspScale;
+        // Project onto camera direction to get the along-ray component
+        const dot = dx * camDirLocalX + dy * camDirLocalY + dz * camDirLocalZ;
 
-        const dx = localMousePos.x - projX;
-        const dy = localMousePos.y - projY;
-        const distXYSq = dx * dx + dy * dy;
+        // Perpendicular component = total - along-ray (this is screen-aligned distance)
+        const perpX = dx - dot * camDirLocalX;
+        const perpY = dy - dot * camDirLocalY;
+        const perpZ = dz - dot * camDirLocalZ;
+        const perpDistSq = perpX * perpX + perpY * perpY + perpZ * perpZ;
 
-        if (distXYSq < mouseRadiusSq) {
-          const distXY = Math.sqrt(distXYSq);
-          const normalizedDist = distXY / particleConfig.mouseRadius;
+        if (perpDistSq < mouseRadiusSq) {
+          const perpDist = Math.sqrt(perpDistSq);
+          const normalizedDist = perpDist / particleConfig.mouseRadius;
           // Cosine dome: smooth falloff, max at center, zero at edges
           const dome = (1 + Math.cos(Math.PI * normalizedDist)) * 0.5;
 
-          const zRange = this.localZMaxUniform.value - this.localZMinUniform.value;
-          const zNormalized = zRange > 0
-            ? (origZ - this.localZMinUniform.value) / zRange
-            : 0.5;
-          const zFactor = 0.05 + 0.95 * zNormalized;
+          const displacement = Math.min(
+            dome * particleConfig.mouseStrength,
+            particleConfig.mouseRadius * 0.6
+          );
 
-          const bulge = dome * particleConfig.mouseStrength * zFactor;
-          // Cap displacement to fraction of dome radius so particles stay within dome
-          const displacement = Math.min(bulge, particleConfig.mouseRadius * 0.6);
-
-          // XY repulsion: push particle away from mouse in local space
-          const repelX = origX - localMousePos.x;
-          const repelY = origY - localMousePos.y;
-          const repelDist = Math.sqrt(repelX * repelX + repelY * repelY);
-          if (repelDist > 0.001) {
-            targetX = (repelX / repelDist) * displacement;
-            targetY = (repelY / repelDist) * displacement;
+          // Repel in the perpendicular plane (screen-aligned repulsion)
+          if (perpDist > 0.001) {
+            targetX = (perpX / perpDist) * displacement;
+            targetY = (perpY / perpDist) * displacement;
+            targetZ = (perpZ / perpDist) * displacement;
           }
-          targetZ = displacement * 0.2;
           hasTarget = true;
         }
       }
