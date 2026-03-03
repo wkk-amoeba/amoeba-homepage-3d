@@ -1,6 +1,6 @@
 import GUI from 'lil-gui';
 import { SceneManager } from '../scene/SceneManager';
-import { models, particleConfig, ParticleMode } from '../config/sceneConfig';
+import { models, particleConfig } from '../config/sceneConfig';
 
 export class DebugPanel {
   private gui: GUI;
@@ -75,6 +75,15 @@ export class DebugPanel {
     // tetraFolder
     //   .add(particleConfig, 'tetrahedronRotationSpeed', 0, 2, 0.05)
     //   .name('Rotation Speed');
+
+    // Orbit settings
+    const orbitFolder = globalFolder.addFolder('Orbit');
+    orbitFolder
+      .add(particleConfig, 'orbitSpeed', 0, 6.0, 0.1)
+      .name('Speed');
+    orbitFolder
+      .add(particleConfig, 'orbitStrength', 0, 1.0, 0.01)
+      .name('Strength');
 
     // Spring physics settings
     const springFolder = globalFolder.addFolder('Spring Physics');

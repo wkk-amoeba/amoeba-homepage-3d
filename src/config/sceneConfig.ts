@@ -50,7 +50,7 @@ export const particleConfig = {
   mode: 'dots' as ParticleMode,
   mouseRadius: 0.3,        // 돔 볼록 반경 (로컬 유닛)
   activationRadius: 4.0,   // 마우스 근접 시 효과 활성 반경 (월드 유닛)
-  mouseStrength: 1.2,      // 마우스 끌림 강도
+  mouseStrength: 1.2,      // 마우스 반발(scatter) 강도
   tetrahedronSize: 0.06,   // 삼각뿔 인스턴스 크기
   tetrahedronRotationSpeed: 0.5, // 삼각뿔 회전 속도 (rad/s)
   // 스프링 물리 (마우스 마그넷)
@@ -58,8 +58,11 @@ export const particleConfig = {
   springStiffness: 180,          // 강성 (높을수록 빠르게 반응)
   springDamping: 12,             // 감쇠 (낮을수록 바운스 많음)
   // 사이즈 스케일링 (마우스 근접 시 파티클 확대)
-  mouseSizeEffect: false,        // 사이즈 효과 on/off
-  mouseSizeStrength: 0.3,        // 최대 확대 배율 (1.0 + 0.3 = 1.3x)
+  mouseSizeEffect: true,         // 사이즈 효과 on/off
+  mouseSizeStrength: 0.5,        // 최대 확대 배율 (이동 시 1.5x, 정지 시 1.15x)
+  // 공전 효과 (마우스 근처 파티클이 궤도 운동)
+  orbitSpeed: 2.0,               // 공전 속도 (rad/s)
+  orbitStrength: 0.15,           // 공전 반경 배율
   // 마우스 패럴랙스 (마우스 위치에 따른 미세 회전으로 입체감)
   parallaxStrength: 0.08,        // 최대 회전 강도 (라디안, ~4.5°)
   // 디버그 시각화

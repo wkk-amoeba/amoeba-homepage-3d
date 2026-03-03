@@ -33,6 +33,13 @@ export class ModelShape {
   private parallaxRotX = 0;
   private parallaxRotY = 0;
 
+  // Orbit time accumulator
+  private orbitTime = 0;
+
+  // Mouse activity (velocity-based, 0=still, 1=moving fast)
+  private mouseActivity = 0;
+  private wasMouseNear = false;
+
   // (boundingRadius removed — now uses particleConfig.activationRadius)
 
   // InstancedMesh for tetrahedron mode (lazy-created)
@@ -429,7 +436,7 @@ export class ModelShape {
     }
   }
 
-  update(delta: number, scrollProgress: number, mouseWorldPos: THREE.Vector3 | null, mouseNorm?: THREE.Vector2) {
+  update(delta: number, scrollProgress: number, mouseWorldPos: THREE.Vector3 | null, mouseNorm?: THREE.Vector2, mouseSpeed?: number) {
     if (!this.loaded || !this.points) return;
 
     const pointsMaterial = this.points.material as THREE.PointsMaterial;
@@ -486,6 +493,20 @@ export class ModelShape {
       }
     }
 
+    // Mouse activity: burst on entry, rise on movement, slow ease-out at rest
+    const isMouseNear = localMousePos !== null;
+    if (isMouseNear && !this.wasMouseNear) {
+      this.mouseActivity = 1.0; // burst on first entry
+    } else {
+      const speedNorm = Math.min((mouseSpeed || 0) * 0.3, 1.0);
+      if (speedNorm > this.mouseActivity) {
+        this.mouseActivity += (speedNorm - this.mouseActivity) * 0.25;
+      } else {
+        this.mouseActivity += (speedNorm - this.mouseActivity) * 0.02;
+      }
+    }
+    this.wasMouseNear = isMouseNear;
+
     // Scale mouseRadius to local space: world radius / object scale = local radius
     const scaledMouseRadius = particleConfig.mouseRadius / this._userScale;
     const mouseRadiusSq = scaledMouseRadius * scaledMouseRadius;
@@ -504,6 +525,8 @@ export class ModelShape {
       camDirLocalY = camDir.y;
       camDirLocalZ = camDir.z;
     }
+
+    this.orbitTime += delta;
 
     for (let i = 0; i < this.particleCount; i++) {
       const i3 = i * 3;
@@ -542,16 +565,43 @@ export class ModelShape {
           // Cosine dome: smooth falloff, max at center, zero at edges
           const dome = (1 + Math.cos(Math.PI * normalizedDist)) * 0.5;
 
-          // Attract toward mouse: pull proportional to dome × distance
-          const pullFactor = dome * particleConfig.mouseStrength;
-          targetX = -perpX * pullFactor;
-          targetY = -perpY * pullFactor;
-          targetZ = -perpZ * pullFactor;
+          const activity = this.mouseActivity;
+
+          // Repel away from mouse (scatter outward, modulated by activity)
+          if (perpDist > 0.001) {
+            const pushFactor = dome * particleConfig.mouseStrength * activity;
+            const invDist = 1 / perpDist;
+            // Normalized direction × dome strength × radius (so push scales with dome area)
+            targetX = (perpX * invDist) * pushFactor * scaledMouseRadius;
+            targetY = (perpY * invDist) * pushFactor * scaledMouseRadius;
+            targetZ = (perpZ * invDist) * pushFactor * scaledMouseRadius;
+          }
+
+          // Orbital motion (modulated by activity)
+          if (particleConfig.orbitStrength > 0 && perpDist > 0.001 && activity > 0.01) {
+            const tX = camDirLocalY * perpZ - camDirLocalZ * perpY;
+            const tY = camDirLocalZ * perpX - camDirLocalX * perpZ;
+            const tZ = camDirLocalX * perpY - camDirLocalY * perpX;
+            const tLen = Math.sqrt(tX * tX + tY * tY + tZ * tZ);
+
+            if (tLen > 0.001) {
+              const invLen = 1 / tLen;
+              const phase = this.scatterOffsets[i3] * 6.283;
+              const orbitVal = Math.sin(this.orbitTime * particleConfig.orbitSpeed + phase)
+                * dome * particleConfig.orbitStrength * scaledMouseRadius * activity;
+              targetX += tX * invLen * orbitVal;
+              targetY += tY * invLen * orbitVal;
+              targetZ += tZ * invLen * orbitVal;
+            }
+          }
+
           hasTarget = true;
 
-          // Optional size scaling
+          // Size: subtle base bulge always + extra boost when moving
           if (particleConfig.mouseSizeEffect) {
-            sizeMulTarget = 1.0 + dome * particleConfig.mouseSizeStrength;
+            const baseBulge = 0.3;  // 30% of max at rest
+            const sizeFactor = baseBulge + (1.0 - baseBulge) * activity;
+            sizeMulTarget = 1.0 + dome * particleConfig.mouseSizeStrength * sizeFactor;
           }
         }
       }

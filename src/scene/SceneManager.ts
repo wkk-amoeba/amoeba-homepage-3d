@@ -20,6 +20,8 @@ export class SceneManager {
   private raycaster: THREE.Raycaster;
   private mouse: THREE.Vector2;
   private mouseWorldPos: THREE.Vector3 | null = null;
+  private prevMouseWorldPos: THREE.Vector3 | null = null;
+  private mouseSpeed = 0;
   private mousePlane: THREE.Plane;
 
   // Dome debug visualization
@@ -152,9 +154,20 @@ export class SceneManager {
 
     const scrollProgress = scrollManager.getProgress();
 
+    // Compute mouse world-space speed
+    if (this.mouseWorldPos) {
+      if (this.prevMouseWorldPos) {
+        this.mouseSpeed = this.mouseWorldPos.distanceTo(this.prevMouseWorldPos) / Math.max(delta, 0.001);
+      }
+      this.prevMouseWorldPos = this.mouseWorldPos.clone();
+    } else {
+      this.prevMouseWorldPos = null;
+      this.mouseSpeed = 0;
+    }
+
     // Update all objects
     this.background.update(delta);
-    this.modelObjects.forEach(model => model.update(delta, scrollProgress, this.mouseWorldPos, this.mouse));
+    this.modelObjects.forEach(model => model.update(delta, scrollProgress, this.mouseWorldPos, this.mouse, this.mouseSpeed));
 
     // Update dome debug disc
     if (particleConfig.showDomeDebug && this.mouseWorldPos) {
