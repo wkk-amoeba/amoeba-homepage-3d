@@ -5,13 +5,17 @@ import { backgroundConfig, getAdjustedParticleCount } from '../config/sceneConfi
 
 export class ParticleBackground {
   private points: THREE.Points;
+  private scene: THREE.Scene;
 
   constructor(scene: THREE.Scene) {
+    this.scene = scene;
+
     const count = getAdjustedParticleCount(backgroundConfig.count);
     const positions = createBackgroundParticles(
       count,
-      backgroundConfig.spread,
-      backgroundConfig.zOffset
+      backgroundConfig.radius,
+      backgroundConfig.height,
+      backgroundConfig.minRadius
     );
 
     const geometry = new THREE.BufferGeometry();
@@ -30,7 +34,31 @@ export class ParticleBackground {
 
     this.points = new THREE.Points(geometry, material);
     this.points.frustumCulled = false;
+    this.points.visible = backgroundConfig.enabled;
     scene.add(this.points);
+  }
+
+  get visible(): boolean { return this.points.visible; }
+  set visible(v: boolean) { this.points.visible = v; }
+
+  /** Rebuild geometry from current backgroundConfig values */
+  rebuild() {
+    const count = getAdjustedParticleCount(backgroundConfig.count);
+    const positions = createBackgroundParticles(
+      count,
+      backgroundConfig.radius,
+      backgroundConfig.height,
+      backgroundConfig.minRadius
+    );
+
+    this.points.geometry.dispose();
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    this.points.geometry = geometry;
+
+    const mat = this.points.material as THREE.PointsMaterial;
+    mat.size = backgroundConfig.size * 2;
+    mat.opacity = backgroundConfig.opacity;
   }
 
   update(delta: number) {

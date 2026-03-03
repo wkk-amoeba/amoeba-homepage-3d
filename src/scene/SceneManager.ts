@@ -189,6 +189,10 @@ export class SceneManager {
     return this.modelObjects;
   }
 
+  getBackground(): ParticleBackground {
+    return this.background;
+  }
+
   destroy() {
     if (this.animationId !== null) {
       cancelAnimationFrame(this.animationId);

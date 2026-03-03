@@ -87,12 +87,14 @@ export const animationPhases = {
   exitRatio: 0.2,    // 퇴장: 20%
 };
 
-// 배경 파티클 설정
+// 배경 파티클 설정 (원통형 분포 → Y축 회전 시 균일)
 export const backgroundConfig = {
-  count: 200,
-  spread: { x: 30, y: 30, z: 20 },
-  zOffset: -5,
-  size: 0.02,
+  enabled: false,         // 기본 비활성
+  count: 240,
+  radius: 10,            // 원통 반경
+  height: 13,            // 원통 높이 (Y축)
+  minRadius: 1,          // 카메라 근처 빈 영역
+  size: 0.05,
   opacity: 0.6,
   rotationSpeed: 0.02,
 };

@@ -142,15 +142,20 @@ export function createScatteredPositions(
 
 export function createBackgroundParticles(
   count: number,
-  spread: { x: number; y: number; z: number },
-  zOffset: number
+  radius: number,
+  height: number,
+  minRadius: number
 ): Float32Array {
   const positions = new Float32Array(count * 3);
 
   for (let i = 0; i < count; i++) {
-    positions[i * 3] = (Math.random() - 0.5) * spread.x;
-    positions[i * 3 + 1] = (Math.random() - 0.5) * spread.y;
-    positions[i * 3 + 2] = (Math.random() - 0.5) * spread.z + zOffset;
+    // Uniform distribution in cylindrical shell (minRadius ~ radius)
+    const angle = Math.random() * Math.PI * 2;
+    const r = Math.sqrt(Math.random() * (radius * radius - minRadius * minRadius) + minRadius * minRadius);
+
+    positions[i * 3] = Math.cos(angle) * r;
+    positions[i * 3 + 1] = (Math.random() - 0.5) * height;
+    positions[i * 3 + 2] = Math.sin(angle) * r;
   }
 
   return positions;

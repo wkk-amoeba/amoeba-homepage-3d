@@ -1,6 +1,6 @@
 import GUI from 'lil-gui';
 import { SceneManager } from '../scene/SceneManager';
-import { models, particleConfig } from '../config/sceneConfig';
+import { models, particleConfig, backgroundConfig } from '../config/sceneConfig';
 
 export class DebugPanel {
   private gui: GUI;
@@ -92,6 +92,56 @@ export class DebugPanel {
     }
 
     globalFolder.open();
+
+    // Background particles folder
+    const bg = sceneManager.getBackground();
+    const bgFolder = this.gui.addFolder('Background');
+    const bgParams = {
+      enabled: bg.visible,
+      count: backgroundConfig.count,
+      radius: backgroundConfig.radius,
+      height: backgroundConfig.height,
+      minRadius: backgroundConfig.minRadius,
+      size: backgroundConfig.size,
+      opacity: backgroundConfig.opacity,
+    };
+
+    bgFolder
+      .add(bgParams, 'enabled')
+      .name('Enable')
+      .onChange((v: boolean) => { backgroundConfig.enabled = v; bg.visible = v; });
+
+    if (isDev) {
+      bgFolder
+        .add(bgParams, 'count', 0, 1000, 10)
+        .name('Count')
+        .onChange((v: number) => { backgroundConfig.count = v; bg.rebuild(); });
+
+      bgFolder
+        .add(bgParams, 'radius', 5, 50, 1)
+        .name('Radius')
+        .onChange((v: number) => { backgroundConfig.radius = v; bg.rebuild(); });
+
+      bgFolder
+        .add(bgParams, 'height', 5, 60, 1)
+        .name('Height')
+        .onChange((v: number) => { backgroundConfig.height = v; bg.rebuild(); });
+
+      bgFolder
+        .add(bgParams, 'minRadius', 0, 20, 1)
+        .name('Min Radius')
+        .onChange((v: number) => { backgroundConfig.minRadius = v; bg.rebuild(); });
+
+      bgFolder
+        .add(bgParams, 'size', 0.005, 0.1, 0.005)
+        .name('Size')
+        .onChange((v: number) => { backgroundConfig.size = v; bg.rebuild(); });
+
+      bgFolder
+        .add(bgParams, 'opacity', 0, 1, 0.05)
+        .name('Opacity')
+        .onChange((v: number) => { backgroundConfig.opacity = v; bg.rebuild(); });
+    }
 
     // Per-model folders
     modelShapes.forEach((model, index) => {
