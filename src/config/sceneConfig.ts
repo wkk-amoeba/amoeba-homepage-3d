@@ -65,7 +65,7 @@ export const particleConfig = {
   orbitSpeed: 6.0,               // 공전 속도 (rad/s)
   orbitStrength: 1.0,            // 공전 반경 배율
   // 마우스 패럴랙스 (마우스 위치에 따른 미세 회전으로 입체감)
-  parallaxStrength: 0.08,        // 최대 회전 강도 (라디안, ~4.5°)
+  parallaxStrength: 0.3,         // 최대 회전 강도 (라디안, ~17°)
   // 디버그 시각화
   showDomeDebug: false,          // 돔 영역 빨간 원 표시
 };

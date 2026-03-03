@@ -58,9 +58,11 @@ export class DebugPanel {
       .name('Scatter Strength')
       .onChange((v: number) => { particleConfig.mouseStrength = v; });
 
-    globalFolder
-      .add(particleConfig, 'parallaxStrength', 0, 0.3, 0.01)
-      .name('Parallax');
+    if (isDev) {
+      globalFolder
+        .add(particleConfig, 'parallaxStrength', 0, 0.5, 0.01)
+        .name('Parallax');
+    }
 
     // Size effect: dev only
     if (isDev) {
