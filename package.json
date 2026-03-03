@@ -9,7 +9,8 @@
     "build": "npm run prebuild && tsc && vite build",
     "build:debug": "npm run prebuild && tsc && vite build --mode development",
     "preview": "vite preview",
-    "lint": "eslint"
+    "lint": "eslint",
+    "deploy": "git checkout production && git merge main && git push origin production && git checkout main"
   },
   "dependencies": {
     "three": "^0.182.0"

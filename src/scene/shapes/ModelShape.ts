@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { getCircleTexture } from '../../utils/circleTexture';
-import { ModelData, waitPositions, scrollConfig, animationPhases, getParticleMultiplier, PERFORMANCE_CONFIG } from '../../config/sceneConfig';
+import { ModelData, ParticleMode, scrollConfig, animationPhases, particleConfig, getParticleMultiplier, PERFORMANCE_CONFIG } from '../../config/sceneConfig';
 
 export class ModelShape {
   private scene: THREE.Scene;
@@ -10,17 +10,46 @@ export class ModelShape {
   private sectionEnd: number;
   private loaded = false;
 
-  private tempPosition = new THREE.Vector3();
-  private tempScale = new THREE.Vector3();
+  // Per-particle data for scatter-reform and mouse magnetic
+  private originalPositions: Float32Array = new Float32Array(0);
+  private scatterOffsets: Float32Array = new Float32Array(0);
+  private mouseOffset: Float32Array = new Float32Array(0);
+  private mouseVelocity: Float32Array = new Float32Array(0); // spring physics
+  private particleCount = 0;
+  private isFirstModel: boolean;
 
   // Debug panel support
   private _totalParticleCount = 0;
   private _visibleParticleCount = 0;
   private _userScale = 1.0;
 
+  // Base rotation (from debug panel)
+  private baseRotX = 0;
+  private baseRotY = 0;
+  private baseRotZ = 0;
+
+  // (boundingRadius removed — now uses particleConfig.activationRadius)
+
+  // InstancedMesh for tetrahedron mode (lazy-created)
+  private instancedMesh: THREE.InstancedMesh | null = null;
+  private instancedDummy = new THREE.Object3D();
+  private rotationAngles: Float32Array = new Float32Array(0);
+  private rotationSpeeds: Float32Array = new Float32Array(0);
+  private currentMode: ParticleMode = 'dots';
+
+  // Shared mutable position buffer (used by both modes)
+  private currentPositions: Float32Array = new Float32Array(0);
+
+  // Custom shader uniforms for depth-based size control
+  private depthNearMulUniform = { value: particleConfig.depthNearMul };
+  private depthFarMulUniform = { value: particleConfig.depthFarMul };
+  private localZMinUniform = { value: -4.0 };
+  private localZMaxUniform = { value: 4.0 };
+
   constructor(scene: THREE.Scene, data: ModelData, sectionIndex: number) {
     this.scene = scene;
     this.data = data;
+    this.isFirstModel = sectionIndex === 0;
 
     this.sectionStart = scrollConfig.sectionStart + sectionIndex * scrollConfig.sectionGap;
     this.sectionEnd = this.sectionStart + scrollConfig.sectionDuration;
@@ -39,7 +68,7 @@ export class ModelShape {
   }
 
   get totalParticleCount(): number {
-    return this._totalParticleCount;
+    return this.particleCount;
   }
 
   get visibleParticleCount(): number {
@@ -47,10 +76,13 @@ export class ModelShape {
   }
 
   set visibleParticleCount(count: number) {
-    const clamped = Math.max(100, Math.min(count, this._totalParticleCount));
+    const clamped = Math.max(100, Math.min(count, this.particleCount));
     this._visibleParticleCount = clamped;
     if (this.points) {
       this.points.geometry.setDrawRange(0, clamped);
+    }
+    if (this.instancedMesh) {
+      this.instancedMesh.count = clamped;
     }
   }
 
@@ -60,6 +92,117 @@ export class ModelShape {
 
   set userScale(value: number) {
     this._userScale = value;
+  }
+
+  get particleSize(): number {
+    if (!this.points) return particleConfig.size;
+    return (this.points.material as THREE.PointsMaterial).size;
+  }
+
+  set particleSize(value: number) {
+    if (this.points) {
+      (this.points.material as THREE.PointsMaterial).size = value;
+    }
+  }
+
+  get rotationX(): number {
+    return this.baseRotX;
+  }
+
+  set rotationX(v: number) {
+    this.baseRotX = v;
+  }
+
+  get rotationY(): number {
+    return this.baseRotY;
+  }
+
+  set rotationY(v: number) {
+    this.baseRotY = v;
+  }
+
+  get rotationZ(): number {
+    return this.baseRotZ;
+  }
+
+  set rotationZ(v: number) {
+    this.baseRotZ = v;
+  }
+
+  // --- Mode switching ---
+
+  setMode(mode: ParticleMode) {
+    if (mode === this.currentMode || !this.loaded) return;
+
+    if (mode === 'tetrahedron' && !this.instancedMesh) {
+      this.createInstancedMesh();
+    }
+
+    if (mode === 'dots') {
+      if (this.points) this.points.visible = true;
+      if (this.instancedMesh) this.instancedMesh.visible = false;
+    } else {
+      if (this.points) this.points.visible = false;
+      if (this.instancedMesh) {
+        this.instancedMesh.visible = true;
+        // Sync opacity from points material
+        const pointsOpacity = (this.points?.material as THREE.PointsMaterial)?.opacity ?? 0;
+        (this.instancedMesh.material as THREE.MeshStandardMaterial).opacity = pointsOpacity;
+      }
+    }
+
+    this.currentMode = mode;
+  }
+
+  private createInstancedMesh() {
+    const geometry = new THREE.TetrahedronGeometry(1, 0);
+
+    const material = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0,
+      metalness: 0.1,
+      roughness: 0.8,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+
+    this.instancedMesh = new THREE.InstancedMesh(geometry, material, this.particleCount);
+    this.instancedMesh.frustumCulled = false;
+    this.instancedMesh.count = this._visibleParticleCount;
+
+    // Copy transform from points
+    if (this.points) {
+      this.instancedMesh.position.copy(this.points.position);
+    }
+    this.instancedMesh.visible = false;
+
+    // Per-instance rotation
+    this.rotationAngles = new Float32Array(this.particleCount);
+    this.rotationSpeeds = new Float32Array(this.particleCount);
+    for (let i = 0; i < this.particleCount; i++) {
+      this.rotationAngles[i] = Math.random() * Math.PI * 2;
+      this.rotationSpeeds[i] = particleConfig.tetrahedronRotationSpeed
+        * (0.5 + Math.random()); // 0.5x ~ 1.5x speed variance
+    }
+
+    // Initialize instance matrices from current positions
+    const s = particleConfig.tetrahedronSize;
+    for (let i = 0; i < this.particleCount; i++) {
+      const i3 = i * 3;
+      this.instancedDummy.position.set(
+        this.currentPositions[i3],
+        this.currentPositions[i3 + 1],
+        this.currentPositions[i3 + 2]
+      );
+      this.instancedDummy.rotation.set(0, this.rotationAngles[i], 0);
+      this.instancedDummy.scale.setScalar(s);
+      this.instancedDummy.updateMatrix();
+      this.instancedMesh.setMatrixAt(i, this.instancedDummy.matrix);
+    }
+    this.instancedMesh.instanceMatrix.needsUpdate = true;
+
+    this.scene.add(this.instancedMesh);
   }
 
   // --- End debug panel accessors ---
@@ -85,7 +228,7 @@ export class ModelShape {
         return;
       }
 
-      // Uniform sub-sampling for lower-end devices (preserves shape across all body parts)
+      // Uniform sub-sampling for lower-end devices
       const multiplier = this.data.particleCount !== undefined
         ? Math.min(this.data.particleCount, this._totalParticleCount) / this._totalParticleCount
         : getParticleMultiplier();
@@ -103,34 +246,79 @@ export class ModelShape {
         }
         sampledPositions = new Float32Array(sampled);
       } else {
-        sampledPositions = positions;
+        sampledPositions = new Float32Array(positions);
       }
-      this._visibleParticleCount = sampledPositions.length / 3;
 
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute('position', new THREE.BufferAttribute(sampledPositions, 3));
+      this.particleCount = sampledPositions.length / 3;
+      this._visibleParticleCount = this.particleCount;
 
       // Normalize to 8 units (.bin is centered but not size-normalized)
-      geometry.computeBoundingBox();
-      if (geometry.boundingBox) {
-        const size = new THREE.Vector3();
-        geometry.boundingBox.getSize(size);
-        const maxDimension = Math.max(size.x, size.y, size.z);
+      {
+        // Compute bounding box manually
+        let minX = Infinity, minY = Infinity, minZ = Infinity;
+        let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+        for (let i = 0; i < this.particleCount; i++) {
+          const i3 = i * 3;
+          const x = sampledPositions[i3], y = sampledPositions[i3 + 1], z = sampledPositions[i3 + 2];
+          if (x < minX) minX = x; if (x > maxX) maxX = x;
+          if (y < minY) minY = y; if (y > maxY) maxY = y;
+          if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+        }
+        const sizeX = maxX - minX, sizeY = maxY - minY, sizeZ = maxZ - minZ;
+        const maxDimension = Math.max(sizeX, sizeY, sizeZ);
 
         const targetSize = 8;
         const normalizeScale = targetSize / maxDimension;
-        geometry.scale(normalizeScale, normalizeScale, normalizeScale);
+        const finalScale = normalizeScale * this.data.scale;
 
-        // Per-model scale
-        geometry.scale(this.data.scale, this.data.scale, this.data.scale);
+        // Apply normalization + per-model scale in-place
+        for (let i = 0; i < sampledPositions.length; i++) {
+          sampledPositions[i] *= finalScale;
+        }
 
-        console.log(`${this.data.name}: original size ${maxDimension.toFixed(2)}, normalized to ${targetSize}, final scale ${this.data.scale}`);
+        // Recompute Z bounds after normalization for depth shader
+        let normZMin = Infinity, normZMax = -Infinity;
+        for (let i = 0; i < this.particleCount; i++) {
+          const z = sampledPositions[i * 3 + 2];
+          if (z < normZMin) normZMin = z;
+          if (z > normZMax) normZMax = z;
+        }
+        this.localZMinUniform.value = normZMin;
+        this.localZMaxUniform.value = normZMax;
+
+        console.log(`${this.data.name}: original size ${maxDimension.toFixed(2)}, normalized to ${targetSize}, final scale ${this.data.scale}, Z range [${normZMin.toFixed(2)}, ${normZMax.toFixed(2)}]`);
       }
+
+      // Store original positions (the target shape)
+      this.originalPositions = new Float32Array(sampledPositions);
+
+      // Pre-compute random scatter directions per particle (spherical uniform, distance 5-15)
+      this.scatterOffsets = new Float32Array(this.particleCount * 3);
+      for (let i = 0; i < this.particleCount; i++) {
+        const i3 = i * 3;
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        const magnitude = 5 + Math.random() * 10;
+        this.scatterOffsets[i3] = Math.sin(phi) * Math.cos(theta) * magnitude;
+        this.scatterOffsets[i3 + 1] = Math.sin(phi) * Math.sin(theta) * magnitude;
+        this.scatterOffsets[i3 + 2] = Math.cos(phi) * magnitude;
+      }
+
+      // Initialize mouse offset and velocity (all zeros)
+      this.mouseOffset = new Float32Array(this.particleCount * 3);
+      this.mouseVelocity = new Float32Array(this.particleCount * 3);
+
+      // Create shared mutable position buffer
+      this.currentPositions = new Float32Array(sampledPositions);
+
+      // Create Points geometry
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.BufferAttribute(this.currentPositions, 3));
 
       const material = new THREE.PointsMaterial({
         transparent: true,
         color: 0xffffff,
-        size: 0.03,
+        size: particleConfig.size,
         sizeAttenuation: true,
         depthWrite: false,
         opacity: 0,
@@ -138,13 +326,46 @@ export class ModelShape {
         alphaMap: getCircleTexture(),
       });
 
+      // Inject depth-based size multiplier into vertex shader
+      const nearMulRef = this.depthNearMulUniform;
+      const farMulRef = this.depthFarMulUniform;
+      const zMinRef = this.localZMinUniform;
+      const zMaxRef = this.localZMaxUniform;
+      material.onBeforeCompile = (shader) => {
+        shader.uniforms.depthNearMul = nearMulRef;
+        shader.uniforms.depthFarMul = farMulRef;
+        shader.uniforms.localZMin = zMinRef;
+        shader.uniforms.localZMax = zMaxRef;
+
+        // Add uniforms at global scope
+        shader.vertexShader = shader.vertexShader.replace(
+          'void main() {',
+          'uniform float depthNearMul;\nuniform float depthFarMul;\nuniform float localZMin;\nuniform float localZMax;\nvoid main() {'
+        );
+
+        // Replace attenuation: standard atten × depth-interpolated multiplier
+        shader.vertexShader = shader.vertexShader.replace(
+          'if ( isPerspective ) gl_PointSize *= ( scale / - mvPosition.z );',
+          `if ( isPerspective ) {
+            gl_PointSize *= ( scale / - mvPosition.z );
+            float nearZ = (modelViewMatrix * vec4(0.0, 0.0, localZMax, 1.0)).z;
+            float farZ = (modelViewMatrix * vec4(0.0, 0.0, localZMin, 1.0)).z;
+            float depthT = clamp((mvPosition.z - nearZ) / (farZ - nearZ), 0.0, 1.0);
+            gl_PointSize *= mix(depthNearMul, depthFarMul, depthT);
+          }`
+        );
+      };
+
       this.points = new THREE.Points(geometry, material);
       this.points.frustumCulled = PERFORMANCE_CONFIG.enableFrustumCulling;
 
-      // Set initial position
-      const waitPos = waitPositions[this.data.animation] || [0, 0, -20];
-      this.points.position.set(...waitPos);
-      this.points.scale.setScalar(1);
+      // Fixed center position (no movement animation)
+      this.points.position.set(0, 0, 2);
+
+      // Apply saved debug overrides from localStorage
+      this.applySavedDebugValues();
+
+      this.points.scale.setScalar(this._userScale);
 
       this.scene.add(this.points);
       this.loaded = true;
@@ -164,118 +385,227 @@ export class ModelShape {
     return t * t;
   }
 
-  private getAnimationPositions(): {
-    wait: [number, number, number];
-    center: [number, number, number];
-    exit: [number, number, number];
-  } {
-    switch (this.data.animation) {
-      case 'left-to-center':
-        return {
-          wait: [-5, -2, 2],
-          center: [0, 0, 2],
-          exit: [5, 2, 2],
-        };
-      case 'right-to-center':
-        return {
-          wait: [5, -2, 2],
-          center: [0, 0, 2],
-          exit: [-5, 2, 2],
-        };
-      case 'zoom-through':
-        return {
-          wait: [0, 0, 15],
-          center: [0, 0, 2],
-          exit: [0, 0, -10],
-        };
-      case 'curve-zoom':
-        return {
-          wait: [6, -3, 2],
-          center: [0, 0, 2],
-          exit: [-6, 3, 7],
-        };
-      case 'scatter-to-form':
-        return {
-          wait: [3, -2, 5],
-          center: [0, 0, 2],
-          exit: [-3, 2, -5],
-        };
-      default:
-        return {
-          wait: [0, 0, -20],
-          center: [0, 0, 2],
-          exit: [0, 0, 20],
-        };
+  private calculatePhase(scrollProgress: number): { opacity: number; scatterAmount: number } {
+    const { enterRatio, holdRatio } = animationPhases;
+
+    // Outside this model's active range
+    if (scrollProgress < this.sectionStart || scrollProgress > this.sectionEnd + 0.02) {
+      return { opacity: 0, scatterAmount: 1.0 };
+    }
+
+    const localProgress = Math.min(1, Math.max(0,
+      (scrollProgress - this.sectionStart) / (this.sectionEnd - this.sectionStart)
+    ));
+
+    // First model: skip enter phase at scroll=0 (show immediately formed)
+    if (this.isFirstModel && localProgress < enterRatio) {
+      return { opacity: 1.0, scatterAmount: 0.0 };
+    }
+
+    if (localProgress < enterRatio) {
+      // Enter phase: particles reform from scattered to shape
+      const t = localProgress / enterRatio;
+      const eased = this.easeOutQuad(t);
+      return { opacity: eased, scatterAmount: 1.0 - eased };
+    } else if (localProgress < enterRatio + holdRatio) {
+      // Hold phase: fully formed
+      return { opacity: 1.0, scatterAmount: 0.0 };
+    } else {
+      // Exit phase: particles scatter outward
+      const t = (localProgress - enterRatio - holdRatio) / (1 - enterRatio - holdRatio);
+      const eased = this.easeInQuad(t);
+      return { opacity: 1.0 - eased, scatterAmount: eased };
     }
   }
 
-  update(delta: number, scrollProgress: number) {
+  update(delta: number, scrollProgress: number, mouseWorldPos: THREE.Vector3 | null) {
     if (!this.loaded || !this.points) return;
 
-    const previewStart = this.sectionStart - scrollConfig.previewOffset;
-    const isActive = scrollProgress >= previewStart && scrollProgress <= this.sectionEnd + 0.02;
+    const pointsMaterial = this.points.material as THREE.PointsMaterial;
+    const { opacity, scatterAmount } = this.calculatePhase(scrollProgress);
 
-    const material = this.points.material as THREE.PointsMaterial;
+    // Sync depth multiplier uniforms from config
+    this.depthNearMulUniform.value = particleConfig.depthNearMul;
+    this.depthFarMulUniform.value = particleConfig.depthFarMul;
 
-    if (!isActive) {
-      if (material.opacity > 0.01) {
-        material.opacity *= 0.9;
-      }
+    // Quick exit if fully invisible and no mouse offset to decay
+    const currentOpacity = this.currentMode === 'tetrahedron' && this.instancedMesh
+      ? (this.instancedMesh.material as THREE.MeshStandardMaterial).opacity
+      : pointsMaterial.opacity;
+    if (opacity < 0.01 && currentOpacity < 0.01) {
       return;
     }
 
-    const positions = this.getAnimationPositions();
-    let targetPosition: [number, number, number] = positions.wait;
-    let targetScale = 1 * this._userScale;
-    let targetOpacity = 0;
-
-    const { enterRatio, holdRatio } = animationPhases;
-
-    // Preview phase
-    if (scrollProgress >= previewStart && scrollProgress < this.sectionStart) {
-      const previewProgress = (scrollProgress - previewStart) / scrollConfig.previewOffset;
-      targetOpacity = previewProgress * 0.3;
-      targetPosition = positions.wait;
+    // Update scale from debug panel
+    this.points.scale.setScalar(this._userScale);
+    if (this.instancedMesh) {
+      this.instancedMesh.scale.setScalar(this._userScale);
     }
 
-    // Active section (3-phase animation)
-    if (scrollProgress >= this.sectionStart && scrollProgress <= this.sectionEnd) {
-      const localProgress = (scrollProgress - this.sectionStart) / (this.sectionEnd - this.sectionStart);
+    // Base rotation only (from debug panel)
+    const finalRotX = this.baseRotX;
+    const finalRotY = this.baseRotY;
+    const finalRotZ = this.baseRotZ;
 
-      if (localProgress < enterRatio) {
-        const enterProgress = this.easeOutQuad(localProgress / enterRatio);
-        targetPosition = [
-          positions.wait[0] + (positions.center[0] - positions.wait[0]) * enterProgress,
-          positions.wait[1] + (positions.center[1] - positions.wait[1]) * enterProgress,
-          positions.wait[2] + (positions.center[2] - positions.wait[2]) * enterProgress,
-        ];
-        targetOpacity = enterProgress;
-      } else if (localProgress < enterRatio + holdRatio) {
-        targetPosition = positions.center;
-        targetOpacity = 1;
-      } else {
-        const exitProgress = this.easeInQuad((localProgress - enterRatio - holdRatio) / (1 - enterRatio - holdRatio));
-        targetPosition = [
-          positions.center[0] + (positions.exit[0] - positions.center[0]) * exitProgress,
-          positions.center[1] + (positions.exit[1] - positions.center[1]) * exitProgress,
-          positions.center[2] + (positions.exit[2] - positions.center[2]) * exitProgress,
-        ];
-        targetOpacity = 1 - exitProgress;
+    this.points.rotation.set(finalRotX, finalRotY, finalRotZ);
+    if (this.instancedMesh) {
+      this.instancedMesh.rotation.set(finalRotX, finalRotY, finalRotZ);
+    }
+
+    // --- Compute particle positions (shared by both modes) ---
+    // Check if mouse is close enough to the object center for magnetic effect
+    let localMousePos: THREE.Vector3 | null = null;
+    const activeObject = this.currentMode === 'dots' ? this.points : this.instancedMesh;
+    if (mouseWorldPos && opacity > 0.1 && activeObject) {
+      const objectCenter = activeObject.position;
+      const distToCenter = mouseWorldPos.distanceTo(objectCenter);
+
+      if (distToCenter < particleConfig.activationRadius * this._userScale) {
+        localMousePos = activeObject.worldToLocal(mouseWorldPos.clone());
       }
     }
 
-    // Smooth interpolation
-    this.tempPosition.set(...targetPosition);
-    this.tempScale.setScalar(targetScale);
-    this.points.position.lerp(this.tempPosition, 0.08);
-    this.points.scale.lerp(this.tempScale, 0.08);
+    const mouseRadiusSq = particleConfig.mouseRadius * particleConfig.mouseRadius;
+    const useSpring = particleConfig.springEnabled;
+    const stiffness = particleConfig.springStiffness;
+    const damping = particleConfig.springDamping;
+    const clampedDelta = Math.min(delta, 0.033); // cap at ~30fps to prevent spring explosion
 
-    // Rotation
-    this.points.rotation.x += delta * 0.15;
-    this.points.rotation.y += delta * 0.1;
+    for (let i = 0; i < this.particleCount; i++) {
+      const i3 = i * 3;
 
-    // Opacity
-    material.opacity = THREE.MathUtils.lerp(material.opacity, targetOpacity, 0.1);
+      const x = this.originalPositions[i3] + this.scatterOffsets[i3] * scatterAmount;
+      const y = this.originalPositions[i3 + 1] + this.scatterOffsets[i3 + 1] * scatterAmount;
+      const z = this.originalPositions[i3 + 2] + this.scatterOffsets[i3 + 2] * scatterAmount;
+
+      // Compute bulge target: dome-shaped push toward camera (+Z)
+      let targetX = 0, targetY = 0, targetZ = 0;
+      let hasTarget = false;
+
+      if (localMousePos) {
+        const origX = this.originalPositions[i3];
+        const origY = this.originalPositions[i3 + 1];
+        const origZ = this.originalPositions[i3 + 2];
+
+        // Camera at world Z=8, object at world Z=2, adjusted for object scale
+        const camLocalZ = 6 / this._userScale;
+
+        // Perspective-correct dome check: project particle onto the mouse's Z plane
+        const perspScale = camLocalZ / Math.max(0.5, camLocalZ - origZ);
+        const projX = origX * perspScale;
+        const projY = origY * perspScale;
+
+        const dx = localMousePos.x - projX;
+        const dy = localMousePos.y - projY;
+        const distXYSq = dx * dx + dy * dy;
+
+        if (distXYSq < mouseRadiusSq) {
+          const distXY = Math.sqrt(distXYSq);
+          const normalizedDist = distXY / particleConfig.mouseRadius;
+          // Cosine dome: smooth falloff, max at center, zero at edges
+          const dome = (1 + Math.cos(Math.PI * normalizedDist)) * 0.5;
+
+          const zRange = this.localZMaxUniform.value - this.localZMinUniform.value;
+          const zNormalized = zRange > 0
+            ? (origZ - this.localZMinUniform.value) / zRange
+            : 0.5;
+          const zFactor = 0.05 + 0.95 * zNormalized;
+
+          const bulge = dome * particleConfig.mouseStrength * zFactor;
+          // Cap displacement to fraction of dome radius so particles stay within dome
+          const displacement = Math.min(bulge, particleConfig.mouseRadius * 0.6);
+
+          // XY repulsion: push particle away from mouse in local space
+          const repelX = origX - localMousePos.x;
+          const repelY = origY - localMousePos.y;
+          const repelDist = Math.sqrt(repelX * repelX + repelY * repelY);
+          if (repelDist > 0.001) {
+            targetX = (repelX / repelDist) * displacement;
+            targetY = (repelY / repelDist) * displacement;
+          }
+          targetZ = displacement * 0.2;
+          hasTarget = true;
+        }
+      }
+
+      // Apply offset using either spring or lerp
+      if (useSpring) {
+        // Spring: acceleration = stiffness * (target - offset) - damping * velocity
+        const ax = stiffness * (targetX - this.mouseOffset[i3]) - damping * this.mouseVelocity[i3];
+        const ay = stiffness * (targetY - this.mouseOffset[i3 + 1]) - damping * this.mouseVelocity[i3 + 1];
+        const az = stiffness * (targetZ - this.mouseOffset[i3 + 2]) - damping * this.mouseVelocity[i3 + 2];
+
+        this.mouseVelocity[i3] += ax * clampedDelta;
+        this.mouseVelocity[i3 + 1] += ay * clampedDelta;
+        this.mouseVelocity[i3 + 2] += az * clampedDelta;
+
+        this.mouseOffset[i3] += this.mouseVelocity[i3] * clampedDelta;
+        this.mouseOffset[i3 + 1] += this.mouseVelocity[i3 + 1] * clampedDelta;
+        this.mouseOffset[i3 + 2] += this.mouseVelocity[i3 + 2] * clampedDelta;
+      } else {
+        // Lerp (original behavior)
+        if (hasTarget) {
+          this.mouseOffset[i3] += (targetX - this.mouseOffset[i3]) * 0.15;
+          this.mouseOffset[i3 + 1] += (targetY - this.mouseOffset[i3 + 1]) * 0.15;
+          this.mouseOffset[i3 + 2] += (targetZ - this.mouseOffset[i3 + 2]) * 0.15;
+        } else {
+          // Fast snap-back so particles outside dome don't linger
+          const returnRate = 0.3;
+          this.mouseOffset[i3] *= (1 - returnRate);
+          this.mouseOffset[i3 + 1] *= (1 - returnRate);
+          this.mouseOffset[i3 + 2] *= (1 - returnRate);
+        }
+      }
+
+      this.currentPositions[i3] = x + this.mouseOffset[i3];
+      this.currentPositions[i3 + 1] = y + this.mouseOffset[i3 + 1];
+      this.currentPositions[i3 + 2] = z + this.mouseOffset[i3 + 2];
+    }
+
+    // --- Mode-specific rendering ---
+    if (this.currentMode === 'dots') {
+      const posAttr = this.points.geometry.getAttribute('position') as THREE.BufferAttribute;
+      posAttr.needsUpdate = true;
+      pointsMaterial.opacity = THREE.MathUtils.lerp(pointsMaterial.opacity, opacity, 0.1);
+    } else if (this.instancedMesh) {
+      // Update instance matrices with positions + per-instance rotation
+      const s = particleConfig.tetrahedronSize;
+      for (let i = 0; i < this.particleCount; i++) {
+        const i3 = i * 3;
+        this.rotationAngles[i] += this.rotationSpeeds[i] * delta;
+
+        this.instancedDummy.position.set(
+          this.currentPositions[i3],
+          this.currentPositions[i3 + 1],
+          this.currentPositions[i3 + 2]
+        );
+        this.instancedDummy.rotation.set(
+          this.rotationAngles[i] * 0.7,
+          this.rotationAngles[i],
+          this.rotationAngles[i] * 0.3
+        );
+        this.instancedDummy.scale.setScalar(s);
+        this.instancedDummy.updateMatrix();
+        this.instancedMesh.setMatrixAt(i, this.instancedDummy.matrix);
+      }
+      this.instancedMesh.instanceMatrix.needsUpdate = true;
+
+      const instancedMaterial = this.instancedMesh.material as THREE.MeshStandardMaterial;
+      instancedMaterial.opacity = THREE.MathUtils.lerp(instancedMaterial.opacity, opacity, 0.1);
+    }
+  }
+
+  private applySavedDebugValues() {
+    const raw = localStorage.getItem(`debug_model_${this.data.name}`);
+    if (!raw || !this.points) return;
+    try {
+      const saved = JSON.parse(raw);
+      if (saved.scale !== undefined) this._userScale = saved.scale;
+      if (saved.rotX !== undefined) this.baseRotX = saved.rotX;
+      if (saved.rotY !== undefined) this.baseRotY = saved.rotY;
+      if (saved.rotZ !== undefined) this.baseRotZ = saved.rotZ;
+      if (saved.particles !== undefined) this.visibleParticleCount = saved.particles;
+    } catch { /* ignore invalid data */ }
   }
 
   dispose() {
@@ -283,6 +613,11 @@ export class ModelShape {
       this.points.geometry.dispose();
       (this.points.material as THREE.Material).dispose();
       this.scene.remove(this.points);
+    }
+    if (this.instancedMesh) {
+      this.instancedMesh.geometry.dispose();
+      (this.instancedMesh.material as THREE.Material).dispose();
+      this.scene.remove(this.instancedMesh);
     }
   }
 }

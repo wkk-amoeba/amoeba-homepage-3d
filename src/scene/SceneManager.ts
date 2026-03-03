@@ -1,9 +1,8 @@
 import * as THREE from 'three';
 import { scrollManager } from '../utils/scrollManager';
 import { ParticleBackground } from './ParticleBackground';
-import { ScrollHintParticles } from './ScrollHintParticles';
 import { ModelShape } from './shapes/ModelShape';
-import { models } from '../config/sceneConfig';
+import { models, particleConfig } from '../config/sceneConfig';
 
 export class SceneManager {
   private scene: THREE.Scene;
@@ -12,11 +11,19 @@ export class SceneManager {
   private container: HTMLElement;
 
   private background: ParticleBackground;
-  private scrollHint: ScrollHintParticles;
   private modelObjects: ModelShape[] = [];
 
   private lastTime = 0;
   private animationId: number | null = null;
+
+  // Mouse tracking for magnetic effect
+  private raycaster: THREE.Raycaster;
+  private mouse: THREE.Vector2;
+  private mouseWorldPos: THREE.Vector3 | null = null;
+  private mousePlane: THREE.Plane;
+
+  // Dome debug visualization
+  private domeDisc: THREE.Mesh;
 
   constructor(containerId: string) {
     const container = document.getElementById(containerId);
@@ -49,16 +56,40 @@ export class SceneManager {
     // Lights
     this.setupLights();
 
+    // Mouse tracking
+    this.raycaster = new THREE.Raycaster();
+    this.mouse = new THREE.Vector2();
+    this.mousePlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), -2); // z=2 plane
+
+    // Dome debug disc (semi-transparent red circle at mouse position)
+    this.domeDisc = new THREE.Mesh(
+      new THREE.RingGeometry(0.95, 1, 64),
+      new THREE.MeshBasicMaterial({
+        color: 0xff0000,
+        transparent: true,
+        opacity: 0.5,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        depthTest: false,
+      })
+    );
+    this.domeDisc.visible = false;
+    this.domeDisc.renderOrder = 999;
+    this.scene.add(this.domeDisc);
+
     // Create objects
     this.background = new ParticleBackground(this.scene);
-    this.scrollHint = new ScrollHintParticles(this.scene);
     this.createModels();
 
     // Event listeners
-    window.addEventListener('resize', this.handleResize.bind(this));
-
-    // Animation loop
+    this.handleResize = this.handleResize.bind(this);
+    this.handleMouseMove = this.handleMouseMove.bind(this);
+    this.handleMouseLeave = this.handleMouseLeave.bind(this);
     this.animate = this.animate.bind(this);
+
+    window.addEventListener('resize', this.handleResize);
+    window.addEventListener('mousemove', this.handleMouseMove);
+    window.addEventListener('mouseleave', this.handleMouseLeave);
   }
 
   private setupLights() {
@@ -90,6 +121,23 @@ export class SceneManager {
     this.renderer.setSize(width, height);
   }
 
+  private handleMouseMove(event: MouseEvent) {
+    // Normalize mouse coordinates to [-1, 1]
+    this.mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    this.mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+    // Project mouse onto the z=2 plane (where models sit)
+    this.raycaster.setFromCamera(this.mouse, this.camera);
+    const intersection = new THREE.Vector3();
+    const hit = this.raycaster.ray.intersectPlane(this.mousePlane, intersection);
+
+    this.mouseWorldPos = hit ? intersection : null;
+  }
+
+  private handleMouseLeave() {
+    this.mouseWorldPos = null;
+  }
+
   start() {
     scrollManager.init('#content');
     this.lastTime = performance.now();
@@ -106,8 +154,20 @@ export class SceneManager {
 
     // Update all objects
     this.background.update(delta);
-    this.scrollHint.update(delta, scrollProgress);
-    this.modelObjects.forEach(model => model.update(delta, scrollProgress));
+    this.modelObjects.forEach(model => model.update(delta, scrollProgress, this.mouseWorldPos));
+
+    // Update dome debug disc
+    if (particleConfig.showDomeDebug && this.mouseWorldPos) {
+      this.domeDisc.visible = true;
+      this.domeDisc.position.set(
+        this.mouseWorldPos.x,
+        this.mouseWorldPos.y,
+        this.mouseWorldPos.z + 0.01
+      );
+      this.domeDisc.scale.setScalar(particleConfig.mouseRadius);
+    } else {
+      this.domeDisc.visible = false;
+    }
 
     this.renderer.render(this.scene, this.camera);
   }
@@ -121,11 +181,15 @@ export class SceneManager {
       cancelAnimationFrame(this.animationId);
     }
     window.removeEventListener('resize', this.handleResize);
+    window.removeEventListener('mousemove', this.handleMouseMove);
+    window.removeEventListener('mouseleave', this.handleMouseLeave);
     scrollManager.destroy();
 
-    // Dispose models
-    this.scrollHint.dispose();
     this.modelObjects.forEach(model => model.dispose());
+
+    this.domeDisc.geometry.dispose();
+    (this.domeDisc.material as THREE.Material).dispose();
+    this.scene.remove(this.domeDisc);
 
     this.renderer.dispose();
     this.container.removeChild(this.renderer.domElement);

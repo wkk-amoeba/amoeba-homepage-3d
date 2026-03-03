@@ -22,88 +22,55 @@ export function getAdjustedParticleCount(baseCount: number): number {
   return Math.floor(baseCount * getParticleMultiplier());
 }
 
-export interface ShapeData {
-  id: number;
-  geometry: 'box' | 'torus' | 'sphere' | 'octahedron' | 'cone';
-  color: string;
-  animation: 'left-to-center' | 'right-to-center' | 'zoom-through' | 'curve-zoom' | 'scatter-to-form';
-  pointCount: number;
-}
-
-// 도형 정의 (파티클용 - 사용 안함)
-export const shapes: ShapeData[] = [
-  { id: 0, geometry: 'box', color: '#ffffff', animation: 'left-to-center', pointCount: 3000 },
-  { id: 1, geometry: 'torus', color: '#ffffff', animation: 'scatter-to-form', pointCount: 4000 },
-  { id: 2, geometry: 'sphere', color: '#ffffff', animation: 'left-to-center', pointCount: 5000 },
-  { id: 3, geometry: 'octahedron', color: '#ffffff', animation: 'zoom-through', pointCount: 3000 },
-  { id: 4, geometry: 'cone', color: '#ffffff', animation: 'curve-zoom', pointCount: 3500 },
-];
-
 // 3D 모델 인터페이스
 export interface ModelData {
   id: number;
   name: string;
   modelPath: string;
   scale: number;
-  animation: 'left-to-center' | 'right-to-center' | 'zoom-through' | 'curve-zoom' | 'scatter-to-form';
   particleCount?: number; // 모델별 파티클 수 고정값 (미지정 시 디바이스 기반 자동 결정)
 }
 
 // 3D 모델 정의 (GLB 파일)
-// 모든 모델은 로딩 시 2 유닛으로 정규화됨 → scale은 미세 조정용
+// 모든 모델은 로딩 시 8 유닛으로 정규화됨 → scale은 미세 조정용
 export const models: ModelData[] = [
-  { id: 0, name: 'Fighter Plane', modelPath: '/models/axis_fighter_plane.glb', scale: 1.0, animation: 'left-to-center' },
-  { id: 1, name: 'Henchman', modelPath: '/models/HenchmanTough.glb', scale: 0.85, animation: 'scatter-to-form' },
-  { id: 2, name: 'Syringe Gun', modelPath: '/models/syringe_gun_-_game_ready_asset.glb', scale: 0.85, animation: 'right-to-center' },
-  { id: 3, name: 'Porsche 911', modelPath: '/models/porsche_911_carrera_4s.glb', scale: 0.9, animation: 'zoom-through' },
-  { id: 4, name: 'BMW M2', modelPath: '/models/bmw_m2_performance_parts.glb', scale: 1.0, animation: 'curve-zoom' },
-  { id: 5, name: 'GAZ69', modelPath: '/models/GAZ69_FAB.glb', scale: 0.85, animation: 'left-to-center' },
+  { id: 0, name: 'Light Bulb', modelPath: '/models/light-bulb.glb', scale: 1.0 },
+  { id: 1, name: 'Porsche 911', modelPath: '/models/porsche_911_carrera_4s.glb', scale: 0.9 },
+  { id: 2, name: 'Henchman', modelPath: '/models/HenchmanTough.glb', scale: 0.85 },
 ];
 
-// IntroShapes용 모델 설정
-export const introModelsConfig = [
-  { modelPath: '/models/axis_fighter_plane.glb', scale: 0.8, initialPos: [0, 0, 0] as [number, number, number] },
-  { modelPath: '/models/HenchmanTough.glb', scale: 0.6, initialPos: [1.5, 0.8, -0.5] as [number, number, number] },
-  { modelPath: '/models/syringe_gun_-_game_ready_asset.glb', scale: 1, initialPos: [-1.5, -0.3, 0.3] as [number, number, number] },
-  { modelPath: '/models/porsche_911_carrera_4s.glb', scale: 0.3, initialPos: [0.8, -1, 0.5] as [number, number, number] },
-  { modelPath: '/models/bmw_m2_performance_parts.glb', scale: 0.3, initialPos: [-1, 1, -0.3] as [number, number, number] },
-  { modelPath: '/models/GAZ69_FAB.glb', scale: 0.2, initialPos: [0, -1.5, 0.2] as [number, number, number] },
-];
+// 파티클 렌더링 모드
+export type ParticleMode = 'dots' | 'tetrahedron';
 
-// IntroShapes 설정
-export const introShapesConfig = [
-  { geometry: 'box' as const, color: '#ffffff', pointCount: 1500, initialPos: [0, 0, 0] as [number, number, number] },
-  { geometry: 'torus' as const, color: '#ffffff', pointCount: 2000, initialPos: [1.5, 0.8, -0.5] as [number, number, number] },
-  { geometry: 'sphere' as const, color: '#ffffff', pointCount: 2500, initialPos: [-1.5, -0.3, 0.3] as [number, number, number] },
-  { geometry: 'octahedron' as const, color: '#ffffff', pointCount: 1500, initialPos: [0.8, -1, 0.5] as [number, number, number] },
-  { geometry: 'cone' as const, color: '#ffffff', pointCount: 1800, initialPos: [-1, 1, -0.3] as [number, number, number] },
-];
-
-// 애니메이션별 대기 위치
-export const waitPositions: Record<string, [number, number, number]> = {
-  'left-to-center': [-5, -2, 2],
-  'right-to-center': [5, -2, 2],
-  'zoom-through': [0, 0, 15],
-  'curve-zoom': [6, -3, 2],
+// 파티클 설정
+export const particleConfig = {
+  size: 0.06,              // 파티클 크기 (기존 0.03에서 증가)
+  depthNearMul: 1.0,      // 가까운 파티클 크기 배율 (1.0=기본)
+  depthFarMul: 1.0,       // 먼 파티클 크기 배율 (1.0=기본)
+  mode: 'dots' as ParticleMode,
+  mouseRadius: 0.3,        // 돔 볼록 반경 (로컬 유닛)
+  activationRadius: 4.0,   // 마우스 근접 시 효과 활성 반경 (월드 유닛)
+  mouseStrength: 1.2,      // 마우스 끌림 강도
+  mouseDecay: 0.95,        // 복귀 감쇠 (1에 가까울수록 느리게 복귀)
+  maxDisplacement: 0.8,    // 최대 파티클 이동 거리 (유닛)
+  tetrahedronSize: 0.06,   // 삼각뿔 인스턴스 크기
+  tetrahedronRotationSpeed: 0.5, // 삼각뿔 회전 속도 (rad/s)
+  // 스프링 물리 (마우스 마그넷)
+  springEnabled: false,          // 스프링 모드 on/off
+  springStiffness: 180,          // 강성 (높을수록 빠르게 반응)
+  springDamping: 12,             // 감쇠 (낮을수록 바운스 많음)
+  // 디버그 시각화
+  showDomeDebug: true,           // 돔 영역 빨간 원 표시
 };
 
-// IntroShapes scatter 방향
-export const scatterDirections = [
-  [-3, 2, -8],
-  [4, 3, -10],
-  [-4, -2, -9],
-  [3, -3, -7],
-  [-2, 4, -11],
-];
-
-// 스크롤 설정 (6개 모델용)
+// 스크롤 설정 (3개 모델용)
 export const scrollConfig = {
-  introEnd: 0.1,
-  sectionStart: 0.1,
-  sectionGap: 0.15,        // 15% 간격 (6개 모델이 100% 안에 들어오도록)
-  sectionDuration: 0.13,   // 13% 지속
-  previewOffset: 0.04,
-  modelCount: 6,           // 모델 개수
+  introEnd: 0,             // 인트로 없음
+  sectionStart: 0,         // 첫 모델 즉시 시작
+  sectionGap: 0.35,        // 35% 간격 (3개 모델 균등 배분)
+  sectionDuration: 0.30,   // 30% 지속
+  previewOffset: 0,        // 프리뷰 없음
+  modelCount: 3,
 };
 
 // 애니메이션 페이즈 설정 (진입 → 고정 → 퇴장)
@@ -121,13 +88,4 @@ export const backgroundConfig = {
   size: 0.02,
   opacity: 0.6,
   rotationSpeed: 0.02,
-};
-
-// ScatterToForm 토러스 설정
-export const torusConfig = {
-  position: [3, -2, 2] as [number, number, number],
-  mainRadius: 0.5,
-  tubeRadius: 0.2,
-  scatterRange: { x: 20, y: 15, z: 10 },
-  scatterZOffset: 5,
 };

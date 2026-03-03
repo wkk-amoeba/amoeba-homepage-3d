@@ -18,12 +18,9 @@ import path from 'node:path';
 // Config  (keep in sync with src/config/sceneConfig.ts)
 // -------------------------------------------------------------------
 const MODELS = [
-  { name: 'axis_fighter_plane', file: 'axis_fighter_plane.glb' },
-  { name: 'HenchmanTough', file: 'HenchmanTough.glb' },
-  { name: 'syringe_gun_-_game_ready_asset', file: 'syringe_gun_-_game_ready_asset.glb' },
+  { name: 'light-bulb', file: 'light-bulb.glb' },
   { name: 'porsche_911_carrera_4s', file: 'porsche_911_carrera_4s.glb' },
-  { name: 'bmw_m2_performance_parts', file: 'bmw_m2_performance_parts.glb' },
-  { name: 'GAZ69_FAB', file: 'GAZ69_FAB.glb' },
+  { name: 'HenchmanTough', file: 'HenchmanTough.glb' },
 ];
 
 const MAX_VERTICES = 15_000;

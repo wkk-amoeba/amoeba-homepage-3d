@@ -14,14 +14,11 @@ export function getCircleTexture(): THREE.Texture {
   const center = size / 2;
   const radius = size / 2 - 2;
 
-  // Draw circle with soft edge
-  const gradient = ctx.createRadialGradient(center, center, 0, center, center, radius);
-  gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-  gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.8)');
-  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, size, size);
+  // Draw hard edge circle
+  ctx.fillStyle = 'white';
+  ctx.beginPath();
+  ctx.arc(center, center, radius, 0, Math.PI * 2);
+  ctx.fill();
 
   circleTexture = new THREE.CanvasTexture(canvas);
   circleTexture.needsUpdate = true;
