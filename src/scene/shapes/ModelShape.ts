@@ -66,6 +66,13 @@ export class ModelShape {
     this.sectionStart = scrollConfig.sectionStart + sectionIndex * scrollConfig.sectionGap;
     this.sectionEnd = this.sectionStart + scrollConfig.sectionDuration;
 
+    // Apply config rotation defaults
+    if (data.rotation) {
+      this.baseRotX = data.rotation[0];
+      this.baseRotY = data.rotation[1];
+      this.baseRotZ = data.rotation[2];
+    }
+
     this.loadModel();
   }
 

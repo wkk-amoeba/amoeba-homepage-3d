@@ -28,15 +28,16 @@ export interface ModelData {
   name: string;
   modelPath: string;
   scale: number;
+  rotation?: [number, number, number]; // 기본 회전 [x, y, z] (라디안)
   particleCount?: number; // 모델별 파티클 수 고정값 (미지정 시 디바이스 기반 자동 결정)
 }
 
 // 3D 모델 정의 (GLB 파일)
 // 모든 모델은 로딩 시 8 유닛으로 정규화됨 → scale은 미세 조정용
 export const models: ModelData[] = [
-  { id: 0, name: 'Light Bulb', modelPath: '/models/light-bulb.glb', scale: 1.0 },
-  { id: 1, name: 'Porsche 911', modelPath: '/models/porsche_911_carrera_4s.glb', scale: 0.9 },
-  { id: 2, name: 'Henchman', modelPath: '/models/HenchmanTough.glb', scale: 0.85 },
+  { id: 0, name: 'Light Bulb', modelPath: '/models/light-bulb.glb', scale: 0.45, rotation: [0, 0.5, 0.4] },
+  { id: 1, name: 'Porsche 911', modelPath: '/models/porsche_911_carrera_4s.glb', scale: 0.8, rotation: [0.5, -0.7, -0.1] },
+  { id: 2, name: 'Henchman', modelPath: '/models/HenchmanTough.glb', scale: 0.65 },
 ];
 
 // 파티클 렌더링 모드
@@ -44,12 +45,12 @@ export type ParticleMode = 'dots' | 'tetrahedron';
 
 // 파티클 설정
 export const particleConfig = {
-  size: 0.06,              // 파티클 크기 (기존 0.03에서 증가)
-  depthNearMul: 1.0,      // 가까운 파티클 크기 배율 (1.0=기본)
-  depthFarMul: 1.0,       // 먼 파티클 크기 배율 (1.0=기본)
+  size: 0.06,              // 파티클 크기
+  depthNearMul: 0.6,      // 가까운 파티클 크기 배율
+  depthFarMul: 2.9,       // 먼 파티클 크기 배율
   mode: 'dots' as ParticleMode,
-  mouseRadius: 0.3,        // 돔 볼록 반경 (로컬 유닛)
-  activationRadius: 4.0,   // 마우스 근접 시 효과 활성 반경 (월드 유닛)
+  mouseRadius: 1.63,       // 돔 반경 (로컬 유닛)
+  activationRadius: 7.0,   // 마우스 근접 시 효과 활성 반경 (월드 유닛)
   mouseStrength: 1.2,      // 마우스 반발(scatter) 강도
   tetrahedronSize: 0.06,   // 삼각뿔 인스턴스 크기
   tetrahedronRotationSpeed: 0.5, // 삼각뿔 회전 속도 (rad/s)
@@ -61,12 +62,12 @@ export const particleConfig = {
   mouseSizeEffect: true,         // 사이즈 효과 on/off
   mouseSizeStrength: 0.5,        // 최대 확대 배율 (이동 시 1.5x, 정지 시 1.15x)
   // 공전 효과 (마우스 근처 파티클이 궤도 운동)
-  orbitSpeed: 2.0,               // 공전 속도 (rad/s)
-  orbitStrength: 0.15,           // 공전 반경 배율
+  orbitSpeed: 6.0,               // 공전 속도 (rad/s)
+  orbitStrength: 1.0,            // 공전 반경 배율
   // 마우스 패럴랙스 (마우스 위치에 따른 미세 회전으로 입체감)
   parallaxStrength: 0.08,        // 최대 회전 강도 (라디안, ~4.5°)
   // 디버그 시각화
-  showDomeDebug: true,           // 돔 영역 빨간 원 표시
+  showDomeDebug: false,          // 돔 영역 빨간 원 표시
 };
 
 // 스크롤 설정 (3개 모델용)

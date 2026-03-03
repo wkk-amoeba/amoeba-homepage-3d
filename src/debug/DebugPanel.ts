@@ -14,6 +14,7 @@ export class DebugPanel {
 
   private buildUI(sceneManager: SceneManager) {
     const modelShapes = sceneManager.getModels();
+    const isDev = import.meta.env.DEV;
 
     // Global Settings folder
     const globalFolder = this.gui.addFolder('Global Settings');
@@ -30,22 +31,21 @@ export class DebugPanel {
         modelShapes.forEach(model => { model.particleSize = v; });
       });
 
-    globalFolder
-      .add(particleConfig, 'depthNearMul', 0.1, 5.0, 0.1)
-      .name('Near Size (×)');
 
     globalFolder
       .add(particleConfig, 'depthFarMul', 0.1, 5.0, 0.1)
       .name('Far Size (×)');
 
     globalFolder
-      .add(globalParams, 'mouseRadius', 0.05, 0.8, 0.01)
+      .add(globalParams, 'mouseRadius', 0.05, 2.0, 0.01)
       .name('Dome Radius')
       .onChange((v: number) => { particleConfig.mouseRadius = v; });
 
-    globalFolder
-      .add(particleConfig, 'activationRadius', 1.0, 10.0, 0.5)
-      .name('Activation Radius');
+    if (isDev) {
+      globalFolder
+        .add(particleConfig, 'activationRadius', 1.0, 10.0, 0.5)
+        .name('Activation Radius');
+    }
 
     globalFolder
       .add(particleConfig, 'showDomeDebug')
@@ -69,26 +69,27 @@ export class DebugPanel {
       .add(particleConfig, 'mouseSizeStrength', 0, 2.0, 0.05)
       .name('Strength');
 
-    // Orbit settings
-    const orbitFolder = globalFolder.addFolder('Orbit');
-    orbitFolder
-      .add(particleConfig, 'orbitSpeed', 0, 6.0, 0.1)
-      .name('Speed');
-    orbitFolder
-      .add(particleConfig, 'orbitStrength', 0, 1.0, 0.01)
-      .name('Strength');
+    // Orbit & Spring: dev only
+    if (isDev) {
+      const orbitFolder = globalFolder.addFolder('Orbit');
+      orbitFolder
+        .add(particleConfig, 'orbitSpeed', 0, 6.0, 0.1)
+        .name('Speed');
+      orbitFolder
+        .add(particleConfig, 'orbitStrength', 0, 1.0, 0.01)
+        .name('Strength');
 
-    // Spring physics settings
-    const springFolder = globalFolder.addFolder('Spring Physics');
-    springFolder
-      .add(particleConfig, 'springEnabled')
-      .name('Enable Spring');
-    springFolder
-      .add(particleConfig, 'springStiffness', 20, 500, 5)
-      .name('Stiffness');
-    springFolder
-      .add(particleConfig, 'springDamping', 1, 30, 0.5)
-      .name('Damping');
+      const springFolder = globalFolder.addFolder('Spring Physics');
+      springFolder
+        .add(particleConfig, 'springEnabled')
+        .name('Enable Spring');
+      springFolder
+        .add(particleConfig, 'springStiffness', 20, 500, 5)
+        .name('Stiffness');
+      springFolder
+        .add(particleConfig, 'springDamping', 1, 30, 0.5)
+        .name('Damping');
+    }
 
     globalFolder.open();
 
