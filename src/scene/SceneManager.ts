@@ -154,7 +154,7 @@ export class SceneManager {
 
     // Update all objects
     this.background.update(delta);
-    this.modelObjects.forEach(model => model.update(delta, scrollProgress, this.mouseWorldPos));
+    this.modelObjects.forEach(model => model.update(delta, scrollProgress, this.mouseWorldPos, this.mouse));
 
     // Update dome debug disc
     if (particleConfig.showDomeDebug && this.mouseWorldPos) {

@@ -21,8 +21,6 @@ export class DebugPanel {
       particleSize: particleConfig.size,
       mouseRadius: particleConfig.mouseRadius,
       mouseStrength: particleConfig.mouseStrength,
-      mouseDecay: particleConfig.mouseDecay,
-      maxDisplacement: particleConfig.maxDisplacement,
     };
 
     globalFolder
@@ -58,34 +56,25 @@ export class DebugPanel {
       .name('Bulge Strength')
       .onChange((v: number) => { particleConfig.mouseStrength = v; });
 
-    globalFolder
-      .add(globalParams, 'mouseDecay', 0.8, 0.99, 0.01)
-      .name('Mouse Decay')
-      .onChange((v: number) => { particleConfig.mouseDecay = v; });
 
-    globalFolder
-      .add(globalParams, 'maxDisplacement', 0.1, 3.0, 0.05)
-      .name('Max Displacement')
-      .onChange((v: number) => { particleConfig.maxDisplacement = v; });
+    // // Particle mode switch (tetrahedron mode disabled)
+    // const modeParams = { mode: particleConfig.mode };
+    // globalFolder
+    //   .add(modeParams, 'mode', ['dots', 'tetrahedron'])
+    //   .name('Particle Mode')
+    //   .onChange((v: ParticleMode) => {
+    //     particleConfig.mode = v;
+    //     modelShapes.forEach(model => model.setMode(v));
+    //   });
 
-    // Particle mode switch
-    const modeParams = { mode: particleConfig.mode };
-    globalFolder
-      .add(modeParams, 'mode', ['dots', 'tetrahedron'])
-      .name('Particle Mode')
-      .onChange((v: ParticleMode) => {
-        particleConfig.mode = v;
-        modelShapes.forEach(model => model.setMode(v));
-      });
-
-    // Tetrahedron settings
-    const tetraFolder = globalFolder.addFolder('Tetrahedron');
-    tetraFolder
-      .add(particleConfig, 'tetrahedronSize', 0.01, 0.2, 0.005)
-      .name('Size');
-    tetraFolder
-      .add(particleConfig, 'tetrahedronRotationSpeed', 0, 2, 0.05)
-      .name('Rotation Speed');
+    // // Tetrahedron settings
+    // const tetraFolder = globalFolder.addFolder('Tetrahedron');
+    // tetraFolder
+    //   .add(particleConfig, 'tetrahedronSize', 0.01, 0.2, 0.005)
+    //   .name('Size');
+    // tetraFolder
+    //   .add(particleConfig, 'tetrahedronRotationSpeed', 0, 2, 0.05)
+    //   .name('Rotation Speed');
 
     // Spring physics settings
     const springFolder = globalFolder.addFolder('Spring Physics');

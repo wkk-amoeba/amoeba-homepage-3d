@@ -15,6 +15,7 @@ export class ModelShape {
   private scatterOffsets: Float32Array = new Float32Array(0);
   private mouseOffset: Float32Array = new Float32Array(0);
   private mouseVelocity: Float32Array = new Float32Array(0); // spring physics
+  private sizeMultipliers: Float32Array = new Float32Array(0); // per-particle size for magnetic effect
   private particleCount = 0;
   private isFirstModel: boolean;
 
@@ -27,6 +28,10 @@ export class ModelShape {
   private baseRotX = 0;
   private baseRotY = 0;
   private baseRotZ = 0;
+
+  // Smoothed parallax rotation
+  private parallaxRotX = 0;
+  private parallaxRotY = 0;
 
   // (boundingRadius removed — now uses particleConfig.activationRadius)
 
@@ -308,12 +313,17 @@ export class ModelShape {
       this.mouseOffset = new Float32Array(this.particleCount * 3);
       this.mouseVelocity = new Float32Array(this.particleCount * 3);
 
+      // Initialize per-particle size multipliers (1.0 = normal)
+      this.sizeMultipliers = new Float32Array(this.particleCount);
+      for (let i = 0; i < this.particleCount; i++) this.sizeMultipliers[i] = 1.0;
+
       // Create shared mutable position buffer
       this.currentPositions = new Float32Array(sampledPositions);
 
       // Create Points geometry
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute('position', new THREE.BufferAttribute(this.currentPositions, 3));
+      geometry.setAttribute('mouseMul', new THREE.BufferAttribute(this.sizeMultipliers, 1));
 
       const material = new THREE.PointsMaterial({
         transparent: true,
@@ -340,7 +350,7 @@ export class ModelShape {
         // Add uniforms at global scope
         shader.vertexShader = shader.vertexShader.replace(
           'void main() {',
-          'uniform float depthNearMul;\nuniform float depthFarMul;\nuniform float localZMin;\nuniform float localZMax;\nvoid main() {'
+          'attribute float mouseMul;\nuniform float depthNearMul;\nuniform float depthFarMul;\nuniform float localZMin;\nuniform float localZMax;\nvoid main() {'
         );
 
         // Replace attenuation: standard atten × depth-interpolated multiplier
@@ -352,6 +362,7 @@ export class ModelShape {
             float farZ = (modelViewMatrix * vec4(0.0, 0.0, localZMin, 1.0)).z;
             float depthT = clamp((mvPosition.z - nearZ) / (farZ - nearZ), 0.0, 1.0);
             gl_PointSize *= mix(depthNearMul, depthFarMul, depthT);
+            gl_PointSize *= mouseMul;
           }`
         );
       };
@@ -418,7 +429,7 @@ export class ModelShape {
     }
   }
 
-  update(delta: number, scrollProgress: number, mouseWorldPos: THREE.Vector3 | null) {
+  update(delta: number, scrollProgress: number, mouseWorldPos: THREE.Vector3 | null, mouseNorm?: THREE.Vector2) {
     if (!this.loaded || !this.points) return;
 
     const pointsMaterial = this.points.material as THREE.PointsMaterial;
@@ -442,9 +453,19 @@ export class ModelShape {
       this.instancedMesh.scale.setScalar(this._userScale);
     }
 
-    // Base rotation only (from debug panel)
-    const finalRotX = this.baseRotX;
-    const finalRotY = this.baseRotY;
+    // Smooth parallax rotation based on mouse position (screen-space tilt)
+    const pStr = particleConfig.parallaxStrength;
+    if (mouseNorm && opacity > 0.1) {
+      this.parallaxRotX += (-mouseNorm.y * pStr - this.parallaxRotX) * 0.05;
+      this.parallaxRotY += (mouseNorm.x * pStr - this.parallaxRotY) * 0.05;
+    } else {
+      this.parallaxRotX *= 0.95;
+      this.parallaxRotY *= 0.95;
+    }
+
+    // Base rotation + parallax
+    const finalRotX = this.baseRotX + this.parallaxRotX;
+    const finalRotY = this.baseRotY + this.parallaxRotY;
     const finalRotZ = this.baseRotZ;
 
     this.points.rotation.set(finalRotX, finalRotY, finalRotZ);
@@ -465,7 +486,9 @@ export class ModelShape {
       }
     }
 
-    const mouseRadiusSq = particleConfig.mouseRadius * particleConfig.mouseRadius;
+    // Scale mouseRadius to local space: world radius / object scale = local radius
+    const scaledMouseRadius = particleConfig.mouseRadius / this._userScale;
+    const mouseRadiusSq = scaledMouseRadius * scaledMouseRadius;
     const useSpring = particleConfig.springEnabled;
     const stiffness = particleConfig.springStiffness;
     const damping = particleConfig.springDamping;
@@ -489,9 +512,10 @@ export class ModelShape {
       const y = this.originalPositions[i3 + 1] + this.scatterOffsets[i3 + 1] * scatterAmount;
       const z = this.originalPositions[i3 + 2] + this.scatterOffsets[i3 + 2] * scatterAmount;
 
-      // Compute repulsion target using perpendicular distance to camera ray
+      // Magnetic attraction + optional size scaling
       let targetX = 0, targetY = 0, targetZ = 0;
       let hasTarget = false;
+      let sizeMulTarget = 1.0;
 
       if (localMousePos) {
         const origX = this.originalPositions[i3];
@@ -514,24 +538,27 @@ export class ModelShape {
 
         if (perpDistSq < mouseRadiusSq) {
           const perpDist = Math.sqrt(perpDistSq);
-          const normalizedDist = perpDist / particleConfig.mouseRadius;
+          const normalizedDist = perpDist / scaledMouseRadius;
           // Cosine dome: smooth falloff, max at center, zero at edges
           const dome = (1 + Math.cos(Math.PI * normalizedDist)) * 0.5;
 
-          const displacement = Math.min(
-            dome * particleConfig.mouseStrength,
-            particleConfig.mouseRadius * 0.6
-          );
-
-          // Repel in the perpendicular plane (screen-aligned repulsion)
-          if (perpDist > 0.001) {
-            targetX = (perpX / perpDist) * displacement;
-            targetY = (perpY / perpDist) * displacement;
-            targetZ = (perpZ / perpDist) * displacement;
-          }
+          // Attract toward mouse: pull proportional to dome × distance
+          const pullFactor = dome * particleConfig.mouseStrength;
+          targetX = -perpX * pullFactor;
+          targetY = -perpY * pullFactor;
+          targetZ = -perpZ * pullFactor;
           hasTarget = true;
+
+          // Optional size scaling
+          if (particleConfig.mouseSizeEffect) {
+            sizeMulTarget = 1.0 + dome * particleConfig.mouseSizeStrength;
+          }
         }
       }
+
+      // Smooth lerp for size multiplier
+      const sizeRate = sizeMulTarget > this.sizeMultipliers[i] ? 0.15 : 0.3;
+      this.sizeMultipliers[i] += (sizeMulTarget - this.sizeMultipliers[i]) * sizeRate;
 
       // Apply offset using either spring or lerp
       if (useSpring) {
@@ -571,6 +598,8 @@ export class ModelShape {
     if (this.currentMode === 'dots') {
       const posAttr = this.points.geometry.getAttribute('position') as THREE.BufferAttribute;
       posAttr.needsUpdate = true;
+      const mulAttr = this.points.geometry.getAttribute('mouseMul') as THREE.BufferAttribute;
+      if (mulAttr) mulAttr.needsUpdate = true;
       pointsMaterial.opacity = THREE.MathUtils.lerp(pointsMaterial.opacity, opacity, 0.1);
     } else if (this.instancedMesh) {
       // Update instance matrices with positions + per-instance rotation

@@ -51,14 +51,17 @@ export const particleConfig = {
   mouseRadius: 0.3,        // 돔 볼록 반경 (로컬 유닛)
   activationRadius: 4.0,   // 마우스 근접 시 효과 활성 반경 (월드 유닛)
   mouseStrength: 1.2,      // 마우스 끌림 강도
-  mouseDecay: 0.95,        // 복귀 감쇠 (1에 가까울수록 느리게 복귀)
-  maxDisplacement: 0.8,    // 최대 파티클 이동 거리 (유닛)
   tetrahedronSize: 0.06,   // 삼각뿔 인스턴스 크기
   tetrahedronRotationSpeed: 0.5, // 삼각뿔 회전 속도 (rad/s)
   // 스프링 물리 (마우스 마그넷)
   springEnabled: false,          // 스프링 모드 on/off
   springStiffness: 180,          // 강성 (높을수록 빠르게 반응)
   springDamping: 12,             // 감쇠 (낮을수록 바운스 많음)
+  // 사이즈 스케일링 (마우스 근접 시 파티클 확대)
+  mouseSizeEffect: false,        // 사이즈 효과 on/off
+  mouseSizeStrength: 0.3,        // 최대 확대 배율 (1.0 + 0.3 = 1.3x)
+  // 마우스 패럴랙스 (마우스 위치에 따른 미세 회전으로 입체감)
+  parallaxStrength: 0.08,        // 최대 회전 강도 (라디안, ~4.5°)
   // 디버그 시각화
   showDomeDebug: true,           // 돔 영역 빨간 원 표시
 };
