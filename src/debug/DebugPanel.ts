@@ -53,28 +53,21 @@ export class DebugPanel {
 
     globalFolder
       .add(globalParams, 'mouseStrength', 0.1, 3.0, 0.05)
-      .name('Bulge Strength')
+      .name('Scatter Strength')
       .onChange((v: number) => { particleConfig.mouseStrength = v; });
 
+    globalFolder
+      .add(particleConfig, 'parallaxStrength', 0, 0.3, 0.01)
+      .name('Parallax');
 
-    // // Particle mode switch (tetrahedron mode disabled)
-    // const modeParams = { mode: particleConfig.mode };
-    // globalFolder
-    //   .add(modeParams, 'mode', ['dots', 'tetrahedron'])
-    //   .name('Particle Mode')
-    //   .onChange((v: ParticleMode) => {
-    //     particleConfig.mode = v;
-    //     modelShapes.forEach(model => model.setMode(v));
-    //   });
-
-    // // Tetrahedron settings
-    // const tetraFolder = globalFolder.addFolder('Tetrahedron');
-    // tetraFolder
-    //   .add(particleConfig, 'tetrahedronSize', 0.01, 0.2, 0.005)
-    //   .name('Size');
-    // tetraFolder
-    //   .add(particleConfig, 'tetrahedronRotationSpeed', 0, 2, 0.05)
-    //   .name('Rotation Speed');
+    // Size effect
+    const sizeFolder = globalFolder.addFolder('Size Effect');
+    sizeFolder
+      .add(particleConfig, 'mouseSizeEffect')
+      .name('Enable');
+    sizeFolder
+      .add(particleConfig, 'mouseSizeStrength', 0, 2.0, 0.05)
+      .name('Strength');
 
     // Orbit settings
     const orbitFolder = globalFolder.addFolder('Orbit');
