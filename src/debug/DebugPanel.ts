@@ -33,8 +33,14 @@ export class DebugPanel {
 
 
     globalFolder
-      .add(particleConfig, 'depthFarMul', 0.1, 5.0, 0.1)
-      .name('Far Size (×)');
+      .add(particleConfig, 'depthNearMul', 0.1, 3.0, 0.1)
+      .name('Near Size (×)');
+
+    if (isDev) {
+      globalFolder
+        .add(particleConfig, 'depthFarMul', 0.1, 5.0, 0.1)
+        .name('Far Size (×)');
+    }
 
     globalFolder
       .add(globalParams, 'mouseRadius', 0.05, 2.0, 0.01)

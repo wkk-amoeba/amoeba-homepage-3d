@@ -46,8 +46,8 @@ export type ParticleMode = 'dots' | 'tetrahedron';
 // 파티클 설정
 export const particleConfig = {
   size: 0.06,              // 파티클 크기
-  depthNearMul: 0.6,      // 가까운 파티클 크기 배율
-  depthFarMul: 2.9,       // 먼 파티클 크기 배율
+  depthNearMul: 1.7,      // 가까운 파티클 크기 배율
+  depthFarMul: 0.4,       // 먼 파티클 크기 배율
   mode: 'dots' as ParticleMode,
   mouseRadius: 1.63,       // 돔 반경 (로컬 유닛)
   activationRadius: 7.0,   // 마우스 근접 시 효과 활성 반경 (월드 유닛)
