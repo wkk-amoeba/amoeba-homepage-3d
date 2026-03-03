@@ -5,11 +5,8 @@ import { backgroundConfig, getAdjustedParticleCount } from '../config/sceneConfi
 
 export class ParticleBackground {
   private points: THREE.Points;
-  private scene: THREE.Scene;
 
   constructor(scene: THREE.Scene) {
-    this.scene = scene;
-
     const count = getAdjustedParticleCount(backgroundConfig.count);
     const positions = createBackgroundParticles(
       count,

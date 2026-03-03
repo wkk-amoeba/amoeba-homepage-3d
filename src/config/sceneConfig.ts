@@ -59,7 +59,7 @@ export const particleConfig = {
   springStiffness: 180,          // 강성 (높을수록 빠르게 반응)
   springDamping: 12,             // 감쇠 (낮을수록 바운스 많음)
   // 사이즈 스케일링 (마우스 근접 시 파티클 확대)
-  mouseSizeEffect: true,         // 사이즈 효과 on/off
+  mouseSizeEffect: false,        // 사이즈 효과 on/off
   mouseSizeStrength: 0.5,        // 최대 확대 배율 (이동 시 1.5x, 정지 시 1.15x)
   // 공전 효과 (마우스 근처 파티클이 궤도 운동)
   orbitSpeed: 6.0,               // 공전 속도 (rad/s)

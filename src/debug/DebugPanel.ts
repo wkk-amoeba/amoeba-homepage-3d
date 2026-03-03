@@ -47,9 +47,11 @@ export class DebugPanel {
         .name('Activation Radius');
     }
 
-    globalFolder
-      .add(particleConfig, 'showDomeDebug')
-      .name('Show Dome Area');
+    if (isDev) {
+      globalFolder
+        .add(particleConfig, 'showDomeDebug')
+        .name('Show Dome Area');
+    }
 
     globalFolder
       .add(globalParams, 'mouseStrength', 0.1, 3.0, 0.05)
@@ -60,14 +62,16 @@ export class DebugPanel {
       .add(particleConfig, 'parallaxStrength', 0, 0.3, 0.01)
       .name('Parallax');
 
-    // Size effect
-    const sizeFolder = globalFolder.addFolder('Size Effect');
-    sizeFolder
-      .add(particleConfig, 'mouseSizeEffect')
-      .name('Enable');
-    sizeFolder
-      .add(particleConfig, 'mouseSizeStrength', 0, 2.0, 0.05)
-      .name('Strength');
+    // Size effect: dev only
+    if (isDev) {
+      const sizeFolder = globalFolder.addFolder('Size Effect');
+      sizeFolder
+        .add(particleConfig, 'mouseSizeEffect')
+        .name('Enable');
+      sizeFolder
+        .add(particleConfig, 'mouseSizeStrength', 0, 2.0, 0.05)
+        .name('Strength');
+    }
 
     // Orbit & Spring: dev only
     if (isDev) {
