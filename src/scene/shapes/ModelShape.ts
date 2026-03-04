@@ -59,6 +59,11 @@ export class ModelShape {
   private localZMinUniform = { value: -4.0 };
   private localZMaxUniform = { value: 4.0 };
 
+  // Lighting uniforms (shared across frames, updated by debug panel)
+  private lightDirUniform: { value: THREE.Vector3 } | null = null;
+  private lightAmbientUniform = { value: particleConfig.lightAmbient };
+  private lightDiffuseUniform = { value: particleConfig.lightDiffuse };
+
   constructor(scene: THREE.Scene, data: ModelData, sectionIndex: number) {
     this.scene = scene;
     this.data = data;
@@ -225,6 +230,22 @@ export class ModelShape {
     this.scene.add(this.instancedMesh);
   }
 
+  // Lighting accessors for debug panel
+  setLightDirection(x: number, y: number, z: number) {
+    if (this.lightDirUniform) {
+      const len = Math.sqrt(x * x + y * y + z * z);
+      this.lightDirUniform.value.set(x / len, y / len, z / len);
+    }
+  }
+
+  setLightAmbient(v: number) {
+    this.lightAmbientUniform.value = v;
+  }
+
+  setLightDiffuse(v: number) {
+    this.lightDiffuseUniform.value = v;
+  }
+
   // --- End debug panel accessors ---
 
   private async loadModel() {
@@ -364,24 +385,46 @@ export class ModelShape {
         alphaMap: getCircleTexture(),
       });
 
-      // Inject depth-based size multiplier into vertex shader
+      // Inject depth-based size multiplier + fake lighting into shaders
       const nearMulRef = this.depthNearMulUniform;
       const farMulRef = this.depthFarMulUniform;
       const zMinRef = this.localZMinUniform;
       const zMaxRef = this.localZMaxUniform;
+
+      // Normalize light direction into class-level uniform
+      const ld = particleConfig.lightDirection;
+      const ldLen = Math.sqrt(ld[0] * ld[0] + ld[1] * ld[1] + ld[2] * ld[2]);
+      this.lightDirUniform = { value: new THREE.Vector3(ld[0] / ldLen, ld[1] / ldLen, ld[2] / ldLen) };
+      const lightDirUniform = this.lightDirUniform;
+      const lightAmbientUniform = this.lightAmbientUniform;
+      const lightDiffuseUniform = this.lightDiffuseUniform;
+      const lightEnabledVal = particleConfig.lightEnabled;
+
       material.onBeforeCompile = (shader) => {
         shader.uniforms.depthNearMul = nearMulRef;
         shader.uniforms.depthFarMul = farMulRef;
         shader.uniforms.localZMin = zMinRef;
         shader.uniforms.localZMax = zMaxRef;
+        shader.uniforms.lightDir = lightDirUniform;
+        shader.uniforms.lightAmbient = lightAmbientUniform;
+        shader.uniforms.lightDiffuse = lightDiffuseUniform;
 
-        // Add uniforms at global scope
+        // Add uniforms + varying at global scope (vertex)
         shader.vertexShader = shader.vertexShader.replace(
           'void main() {',
-          'attribute float mouseMul;\nuniform float depthNearMul;\nuniform float depthFarMul;\nuniform float localZMin;\nuniform float localZMax;\nvoid main() {'
+          `attribute float mouseMul;
+uniform float depthNearMul;
+uniform float depthFarMul;
+uniform float localZMin;
+uniform float localZMax;
+uniform vec3 lightDir;
+uniform float lightAmbient;
+uniform float lightDiffuse;
+varying float vBrightness;
+void main() {`
         );
 
-        // Replace attenuation: standard atten × depth-interpolated multiplier
+        // Replace attenuation: standard atten × depth-interpolated multiplier + compute lighting
         shader.vertexShader = shader.vertexShader.replace(
           'if ( isPerspective ) gl_PointSize *= ( scale / - mvPosition.z );',
           `if ( isPerspective ) {
@@ -391,7 +434,24 @@ export class ModelShape {
             float depthT = clamp((mvPosition.z - nearZ) / (farZ - nearZ), 0.0, 1.0);
             gl_PointSize *= mix(depthNearMul, depthFarMul, depthT);
             gl_PointSize *= mouseMul;
+            ${lightEnabledVal ? `
+            vec3 normal = normalize(position);
+            float diff = max(dot(normal, lightDir), 0.0);
+            vBrightness = lightAmbient + lightDiffuse * diff;
+            ` : `
+            vBrightness = 1.0;
+            `}
           }`
+        );
+
+        // Fragment shader: add varying + apply brightness
+        shader.fragmentShader = shader.fragmentShader.replace(
+          'void main() {',
+          'varying float vBrightness;\nvoid main() {'
+        );
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <opaque_fragment>',
+          '#include <opaque_fragment>\ngl_FragColor.rgb *= vBrightness;'
         );
       };
 

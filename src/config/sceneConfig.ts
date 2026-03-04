@@ -36,9 +36,9 @@ export interface ModelData {
 // 3D 모델 정의
 // geometry가 있으면 프로그래밍 생성, modelPath가 있으면 GLB .bin 로드
 export const models: ModelData[] = [
-  { id: 0, name: 'Sphere', geometry: 'sphere', scale: 0.4 },
-  { id: 1, name: 'Box', geometry: 'box', scale: 0.4 },
-  { id: 2, name: 'Tetrahedron', geometry: 'tetrahedron', scale: 0.4 },
+  { id: 0, name: 'Sphere', geometry: 'sphere', scale: 0.36 },
+  { id: 1, name: 'Box', geometry: 'box', scale: 0.27 },
+  { id: 2, name: 'Tetrahedron', geometry: 'tetrahedron', scale: 0.315 },
 ];
 
 // 파티클 렌더링 모드
@@ -67,6 +67,11 @@ export const particleConfig = {
   orbitStrength: 1.0,            // 공전 반경 배율
   // 마우스 패럴랙스 (마우스 위치에 따른 미세 회전으로 입체감)
   parallaxStrength: 0.5,         // 최대 회전 강도 (라디안, ~29°)
+  // 가짜 라이팅 (파티클 위치 기반 법선으로 명암)
+  lightEnabled: true,
+  lightDirection: [-0.5, 1.0, 0.3] as [number, number, number],  // 광원 방향 (좌상단)
+  lightAmbient: 0.4,             // 최소 밝기 (그림자 부분)
+  lightDiffuse: 0.6,             // 확산광 강도
   // 디버그 시각화
   showDomeDebug: false,          // 돔 영역 빨간 원 표시
 };

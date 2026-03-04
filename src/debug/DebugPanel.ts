@@ -108,6 +108,30 @@ export class DebugPanel {
         .name('Damping');
     }
 
+    // Lighting folder
+    const lightFolder = globalFolder.addFolder('Lighting');
+    const lightParams = {
+      dirX: particleConfig.lightDirection[0],
+      dirY: particleConfig.lightDirection[1],
+      dirZ: particleConfig.lightDirection[2],
+      ambient: particleConfig.lightAmbient,
+      diffuse: particleConfig.lightDiffuse,
+    };
+
+    const updateLightDir = () => {
+      modelShapes.forEach(model => model.setLightDirection(lightParams.dirX, lightParams.dirY, lightParams.dirZ));
+    };
+
+    lightFolder.add(lightParams, 'dirX', -1, 1, 0.05).name('Direction X').onChange(updateLightDir);
+    lightFolder.add(lightParams, 'dirY', -1, 1, 0.05).name('Direction Y').onChange(updateLightDir);
+    lightFolder.add(lightParams, 'dirZ', -1, 1, 0.05).name('Direction Z').onChange(updateLightDir);
+    lightFolder.add(lightParams, 'ambient', 0, 1, 0.05).name('Ambient').onChange((v: number) => {
+      modelShapes.forEach(model => model.setLightAmbient(v));
+    });
+    lightFolder.add(lightParams, 'diffuse', 0, 1, 0.05).name('Diffuse').onChange((v: number) => {
+      modelShapes.forEach(model => model.setLightDiffuse(v));
+    });
+
     globalFolder.open();
 
     // Background particles folder
