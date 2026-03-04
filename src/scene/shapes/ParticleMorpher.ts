@@ -483,6 +483,19 @@ void main() {`
         baseX = lerpX + this.scatterOffsets[i3] * scatterAmount;
         baseY = lerpY + this.scatterOffsets[i3 + 1] * scatterAmount;
         baseZ = lerpZ + this.scatterOffsets[i3 + 2] * scatterAmount;
+
+        // Rotation around effective center during transition
+        if (particleConfig.transitionRotation) {
+          const cx = effectiveCenter.x;
+          // Rotate around Y axis (relative to effective center)
+          const angle = phase.t * particleConfig.transitionRotationSpeed * Math.PI * 2;
+          const rx = baseX - cx;
+          const rz = baseZ;
+          const cosA = Math.cos(angle);
+          const sinA = Math.sin(angle);
+          baseX = cx + rx * cosA - rz * sinA;
+          baseZ = rx * sinA + rz * cosA;
+        }
       }
 
       // --- Mouse interaction (same logic as ModelShape) ---

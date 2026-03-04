@@ -1,6 +1,6 @@
 import GUI from 'lil-gui';
 import { SceneManager } from '../scene/SceneManager';
-import { particleConfig, backgroundConfig } from '../config/sceneConfig';
+import { particleConfig, backgroundConfig, animationPhases } from '../config/sceneConfig';
 
 export class DebugPanel {
   private gui: GUI;
@@ -82,6 +82,41 @@ export class DebugPanel {
       globalFolder
         .add(particleConfig, 'parallaxStrength', 0, 0.5, 0.01)
         .name('Parallax');
+    }
+
+    // Animation phases
+    if (isDev) {
+      const phaseFolder = globalFolder.addFolder('Animation Phases');
+      const exitCtrl = phaseFolder
+        .add(animationPhases, 'exitRatio', 0.05, 0.5, 0.05)
+        .name('Exit')
+        .disable();
+
+      phaseFolder
+        .add(animationPhases, 'enterRatio', 0.05, 0.5, 0.05)
+        .name('Enter')
+        .onChange(() => {
+          animationPhases.exitRatio = Math.max(0.05, 1 - animationPhases.enterRatio - animationPhases.holdRatio);
+          exitCtrl.updateDisplay();
+        });
+      phaseFolder
+        .add(animationPhases, 'holdRatio', 0.1, 0.8, 0.05)
+        .name('Hold')
+        .onChange(() => {
+          animationPhases.exitRatio = Math.max(0.05, 1 - animationPhases.enterRatio - animationPhases.holdRatio);
+          exitCtrl.updateDisplay();
+        });
+    }
+
+    // Transition rotation
+    if (isDev) {
+      const transFolder = globalFolder.addFolder('Transition Rotation');
+      transFolder
+        .add(particleConfig, 'transitionRotation')
+        .name('Enable');
+      transFolder
+        .add(particleConfig, 'transitionRotationSpeed', 0.5, 10.0, 0.5)
+        .name('Speed');
     }
 
     // Size effect: dev only

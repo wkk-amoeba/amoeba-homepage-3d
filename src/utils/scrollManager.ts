@@ -37,18 +37,36 @@ class ScrollManager {
       scrollPercent.textContent = `${Math.round(this.progress * 100)}%`;
     }
 
-    // Update shape section visibility
-    const currentSection = this.getCurrentSection();
+    // Update shape section text with fade in/out (fixed position, no movement)
     const sections = document.querySelectorAll('.shape-section');
+    const fadeInRatio = 0.15;
+    const fadeOutRatio = 0.15;
+
     sections.forEach((section, index) => {
-      const content = section.querySelector('.shape-content');
-      if (content) {
-        if (index === currentSection) {
-          content.classList.add('visible');
-        } else {
-          content.classList.remove('visible');
-        }
+      const content = section.querySelector('.shape-content') as HTMLElement;
+      if (!content) return;
+
+      const start = scrollConfig.sectionStart + index * scrollConfig.sectionGap;
+      const end = start + scrollConfig.sectionDuration;
+
+      if (this.progress < start || this.progress > end) {
+        content.style.opacity = '0';
+        return;
       }
+
+      const local = (this.progress - start) / scrollConfig.sectionDuration;
+      let opacity = 1;
+
+      // Fade in (skip for first section — show immediately)
+      if (index > 0 && local < fadeInRatio) {
+        opacity = local / fadeInRatio;
+      }
+      // Fade out (skip for last section — stay visible)
+      else if (index < sections.length - 1 && local > 1 - fadeOutRatio) {
+        opacity = 1 - (local - (1 - fadeOutRatio)) / fadeOutRatio;
+      }
+
+      content.style.opacity = String(opacity);
     });
   }
 
