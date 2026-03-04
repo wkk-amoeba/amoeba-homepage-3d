@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { getCircleTexture } from '../../utils/circleTexture';
 import { ModelData, ParticleMode, scrollConfig, animationPhases, particleConfig, getParticleMultiplier, PERFORMANCE_CONFIG } from '../../config/sceneConfig';
+import { createShapePoints } from '../../utils/shapeGenerators';
 
 export class ModelShape {
   private scene: THREE.Scene;
@@ -228,44 +229,57 @@ export class ModelShape {
 
   private async loadModel() {
     try {
-      // Derive .bin path from .glb path
-      const binPath = this.data.modelPath
-        .replace('/models/', '/models/vertices/')
-        .replace('.glb', '.bin');
-
-      const response = await fetch(binPath);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch ${binPath}: ${response.status}`);
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-      const positions = new Float32Array(arrayBuffer);
-      this._totalParticleCount = positions.length / 3;
-
-      if (this._totalParticleCount === 0) {
-        console.error(`No vertices in pre-extracted file: ${this.data.name}`);
-        return;
-      }
-
-      // Uniform sub-sampling for lower-end devices
-      const multiplier = this.data.particleCount !== undefined
-        ? Math.min(this.data.particleCount, this._totalParticleCount) / this._totalParticleCount
-        : getParticleMultiplier();
-
       let sampledPositions: Float32Array;
-      if (multiplier < 1.0) {
-        const targetCount = Math.floor(this._totalParticleCount * multiplier);
-        const step = Math.max(1, Math.ceil(this._totalParticleCount / targetCount));
-        const sampled: number[] = [];
-        for (let i = 0; i < this._totalParticleCount; i++) {
-          if (i % step === 0) {
-            const base = i * 3;
-            sampled.push(positions[base], positions[base + 1], positions[base + 2]);
-          }
+
+      if (this.data.geometry) {
+        // Programmatic shape generation
+        const baseCount = this.data.particleCount ?? PERFORMANCE_CONFIG.maxVerticesPerModel;
+        const multiplier = getParticleMultiplier();
+        const count = Math.floor(baseCount * multiplier);
+        sampledPositions = createShapePoints(this.data.geometry, count);
+        this._totalParticleCount = count;
+      } else if (this.data.modelPath) {
+        // GLB .bin pipeline
+        const binPath = this.data.modelPath
+          .replace('/models/', '/models/vertices/')
+          .replace('.glb', '.bin');
+
+        const response = await fetch(binPath);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch ${binPath}: ${response.status}`);
         }
-        sampledPositions = new Float32Array(sampled);
+
+        const arrayBuffer = await response.arrayBuffer();
+        const positions = new Float32Array(arrayBuffer);
+        this._totalParticleCount = positions.length / 3;
+
+        if (this._totalParticleCount === 0) {
+          console.error(`No vertices in pre-extracted file: ${this.data.name}`);
+          return;
+        }
+
+        // Uniform sub-sampling for lower-end devices
+        const multiplier = this.data.particleCount !== undefined
+          ? Math.min(this.data.particleCount, this._totalParticleCount) / this._totalParticleCount
+          : getParticleMultiplier();
+
+        if (multiplier < 1.0) {
+          const targetCount = Math.floor(this._totalParticleCount * multiplier);
+          const step = Math.max(1, Math.ceil(this._totalParticleCount / targetCount));
+          const sampled: number[] = [];
+          for (let i = 0; i < this._totalParticleCount; i++) {
+            if (i % step === 0) {
+              const base = i * 3;
+              sampled.push(positions[base], positions[base + 1], positions[base + 2]);
+            }
+          }
+          sampledPositions = new Float32Array(sampled);
+        } else {
+          sampledPositions = new Float32Array(positions);
+        }
       } else {
-        sampledPositions = new Float32Array(positions);
+        console.error(`No geometry or modelPath for: ${this.data.name}`);
+        return;
       }
 
       this.particleCount = sampledPositions.length / 3;

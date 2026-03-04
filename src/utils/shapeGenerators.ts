@@ -96,6 +96,31 @@ export function createShapePoints(geometry: string, count: number): Float32Array
       }
       break;
     }
+    case 'tetrahedron': {
+      // Regular tetrahedron vertices (centered at origin, radius ~0.6)
+      const tetVerts = [
+        [0, 0.6, 0],
+        [0.566, -0.2, 0],
+        [-0.283, -0.2, 0.49],
+        [-0.283, -0.2, -0.49]
+      ];
+      const tetFaces = [
+        [0, 1, 2], [0, 2, 3], [0, 3, 1], [1, 3, 2]
+      ];
+
+      for (let i = 0; i < count; i++) {
+        const face = Math.floor(Math.random() * 4);
+        const u = Math.random();
+        const v = Math.random() * (1 - u);
+        const w = 1 - u - v;
+
+        const [a, b, c] = tetFaces[face];
+        positions[i * 3] = tetVerts[a][0] * u + tetVerts[b][0] * v + tetVerts[c][0] * w;
+        positions[i * 3 + 1] = tetVerts[a][1] * u + tetVerts[b][1] * v + tetVerts[c][1] * w;
+        positions[i * 3 + 2] = tetVerts[a][2] * u + tetVerts[b][2] * v + tetVerts[c][2] * w;
+      }
+      break;
+    }
     default: {
       for (let i = 0; i < count; i++) {
         const phi = Math.acos(1 - 2 * (i + 0.5) / count);
