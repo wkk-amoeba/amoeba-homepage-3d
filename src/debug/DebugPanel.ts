@@ -1,6 +1,6 @@
 import GUI from 'lil-gui';
 import { SceneManager } from '../scene/SceneManager';
-import { models, particleConfig, backgroundConfig } from '../config/sceneConfig';
+import { particleConfig, backgroundConfig } from '../config/sceneConfig';
 
 export class DebugPanel {
   private gui: GUI;
@@ -18,13 +18,16 @@ export class DebugPanel {
   }
 
   private buildUI(sceneManager: SceneManager) {
-    const modelShapes = sceneManager.getModels();
+    const morpher = sceneManager.getMorpher();
+    if (!morpher) return;
+
     const isDev = import.meta.env.DEV;
 
     // Global Settings folder
     const globalFolder = this.gui.addFolder('Global Settings');
     const globalParams = {
       particleSize: particleConfig.size,
+      scale: morpher.userScale,
       mouseRadius: particleConfig.mouseRadius,
       mouseStrength: particleConfig.mouseStrength,
     };
@@ -32,10 +35,12 @@ export class DebugPanel {
     globalFolder
       .add(globalParams, 'particleSize', 0.01, 0.15, 0.005)
       .name('Particle Size')
-      .onChange((v: number) => {
-        modelShapes.forEach(model => { model.particleSize = v; });
-      });
+      .onChange((v: number) => { morpher.particleSize = v; });
 
+    globalFolder
+      .add(globalParams, 'scale', 0.1, 3.0, 0.05)
+      .name('Scale')
+      .onChange((v: number) => { morpher.userScale = v; });
 
     globalFolder
       .add(particleConfig, 'depthNearMul', 0.1, 3.0, 0.1)
@@ -68,6 +73,10 @@ export class DebugPanel {
       .add(globalParams, 'mouseStrength', 0.1, 3.0, 0.05)
       .name('Scatter Strength')
       .onChange((v: number) => { particleConfig.mouseStrength = v; });
+
+    globalFolder
+      .add(particleConfig, 'scatterScale', 0.01, 1.0, 0.01)
+      .name('Scatter Range');
 
     if (isDev) {
       globalFolder
@@ -119,17 +128,17 @@ export class DebugPanel {
     };
 
     const updateLightDir = () => {
-      modelShapes.forEach(model => model.setLightDirection(lightParams.dirX, lightParams.dirY, lightParams.dirZ));
+      morpher.setLightDirection(lightParams.dirX, lightParams.dirY, lightParams.dirZ);
     };
 
     lightFolder.add(lightParams, 'dirX', -1, 1, 0.05).name('Direction X').onChange(updateLightDir);
     lightFolder.add(lightParams, 'dirY', -1, 1, 0.05).name('Direction Y').onChange(updateLightDir);
     lightFolder.add(lightParams, 'dirZ', -1, 1, 0.05).name('Direction Z').onChange(updateLightDir);
     lightFolder.add(lightParams, 'ambient', 0, 1, 0.05).name('Ambient').onChange((v: number) => {
-      modelShapes.forEach(model => model.setLightAmbient(v));
+      morpher.setLightAmbient(v);
     });
     lightFolder.add(lightParams, 'diffuse', 0, 1, 0.05).name('Diffuse').onChange((v: number) => {
-      modelShapes.forEach(model => model.setLightDiffuse(v));
+      morpher.setLightDiffuse(v);
     });
 
     globalFolder.open();
@@ -184,80 +193,39 @@ export class DebugPanel {
         .onChange((v: number) => { backgroundConfig.opacity = v; bg.rebuild(); });
     }
 
-    // Per-model folders
-    modelShapes.forEach((model, index) => {
-      if (model.totalParticleCount === 0) return;
+    // Per-shape position folders
+    const shapeTargets = morpher.getShapeTargets();
+    shapeTargets.forEach((shape, index) => {
+      const folder = this.gui.addFolder(`${index}: ${shape.name}`);
 
-      const folder = this.gui.addFolder(`${index}: ${model.name}`);
-
-      // Read current values (already includes localStorage overrides applied by ModelShape)
       const params = {
-        scale: model.userScale,
-        rotX: model.rotationX,
-        rotY: model.rotationY,
-        rotZ: model.rotationZ,
-        particles: model.visibleParticleCount,
+        posX: shape.worldOffset.x,
+        posY: shape.worldOffset.y,
+        posZ: shape.worldOffset.z,
       };
 
       folder
-        .add(params, 'scale', 0.1, 3.0, 0.05)
-        .name('Scale')
-        .onChange((v: number) => { model.userScale = v; });
+        .add(params, 'posX', -10, 10, 0.1)
+        .name('Position X')
+        .onChange((v: number) => { morpher.setShapePosition(index, v, params.posY, params.posZ); });
 
       folder
-        .add(params, 'rotX', -Math.PI, Math.PI, 0.01)
-        .name('Rotation X')
-        .onChange((v: number) => { model.rotationX = v; });
+        .add(params, 'posY', -10, 10, 0.1)
+        .name('Position Y')
+        .onChange((v: number) => { morpher.setShapePosition(index, params.posX, v, params.posZ); });
 
       folder
-        .add(params, 'rotY', -Math.PI, Math.PI, 0.01)
-        .name('Rotation Y')
-        .onChange((v: number) => { model.rotationY = v; });
-
-      folder
-        .add(params, 'rotZ', -Math.PI, Math.PI, 0.01)
-        .name('Rotation Z')
-        .onChange((v: number) => { model.rotationZ = v; });
-
-      folder
-        .add(params, 'particles', 100, model.totalParticleCount, 100)
-        .name(`Particles (max ${model.totalParticleCount})`)
-        .onChange((v: number) => { model.visibleParticleCount = v; });
-
-      folder.add({
-        set: () => {
-          const data = {
-            scale: model.userScale,
-            rotX: model.rotationX,
-            rotY: model.rotationY,
-            rotZ: model.rotationZ,
-            particles: model.visibleParticleCount,
-          };
-          localStorage.setItem(`debug_model_${model.name}`, JSON.stringify(data));
-          console.log(`Saved debug values for ${model.name}:`, data);
-        },
-      }, 'set').name('Set');
+        .add(params, 'posZ', -10, 10, 0.1)
+        .name('Position Z')
+        .onChange((v: number) => { morpher.setShapePosition(index, params.posX, params.posY, v); });
 
       folder.open();
     });
 
-    // Export button
-    this.gui.add({ export: () => this.exportConfig(modelShapes) }, 'export').name('Export Config');
-  }
-
-  private exportConfig(modelShapes: ReturnType<SceneManager['getModels']>) {
-    const config = modelShapes.map((model, i) => ({
-      name: model.name,
-      scale: model.userScale * models[i].scale,
-      particleCount: model.visibleParticleCount,
-      rotation: { x: model.rotationX, y: model.rotationY, z: model.rotationZ },
-    }));
-
-    console.log('\n--- sceneConfig.ts models update ---');
-    config.forEach((c) => {
-      console.log(`  { name: '${c.name}', scale: ${c.scale.toFixed(2)}, particleCount: ${c.particleCount}, rotation: [${c.rotation.x.toFixed(2)}, ${c.rotation.y.toFixed(2)}, ${c.rotation.z.toFixed(2)}] }`);
-    });
-    console.log('------------------------------------\n');
+    // Particle count info
+    this.gui.add({ particles: morpher.totalParticleCount }, 'particles')
+      .name('Total Particles')
+      .disable();
   }
 
   destroy() {

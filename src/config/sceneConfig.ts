@@ -29,6 +29,7 @@ export interface ModelData {
   modelPath?: string;            // GLB 경로 (geometry 미지정 시 필수)
   geometry?: string;             // 프로그래밍 도형 ('sphere' | 'box' | 'tetrahedron' 등)
   scale: number;
+  position?: [number, number, number]; // 월드 위치 오프셋 [x, y, z] (Points 중심 기준)
   rotation?: [number, number, number]; // 기본 회전 [x, y, z] (라디안)
   particleCount?: number; // 모델별 파티클 수 고정값 (미지정 시 디바이스 기반 자동 결정)
 }
@@ -36,9 +37,9 @@ export interface ModelData {
 // 3D 모델 정의
 // geometry가 있으면 프로그래밍 생성, modelPath가 있으면 GLB .bin 로드
 export const models: ModelData[] = [
-  { id: 0, name: 'Sphere', geometry: 'sphere', scale: 0.36 },
-  { id: 1, name: 'Box', geometry: 'box', scale: 0.27 },
-  { id: 2, name: 'Tetrahedron', geometry: 'tetrahedron', scale: 0.315 },
+  { id: 0, name: 'Sphere', geometry: 'sphere', scale: 0.36, position: [-1.5, 0.3, 0] },
+  { id: 1, name: 'Box', geometry: 'box', scale: 0.27, position: [0.8, -0.7, 0] },
+  { id: 2, name: 'Tetrahedron', geometry: 'tetrahedron', scale: 0.315, position: [0, 0, 0] },
 ];
 
 // 파티클 렌더링 모드
@@ -67,11 +68,13 @@ export const particleConfig = {
   orbitStrength: 1.0,            // 공전 반경 배율
   // 마우스 패럴랙스 (마우스 위치에 따른 미세 회전으로 입체감)
   parallaxStrength: 0.5,         // 최대 회전 강도 (라디안, ~29°)
+  // 전환 scatter 범위 (진입/퇴장 시 파티클 흩어짐 배율, 1.0 = 기본 5~15유닛)
+  scatterScale: 0.03,
   // 가짜 라이팅 (파티클 위치 기반 법선으로 명암)
   lightEnabled: true,
-  lightDirection: [-0.5, 1.0, 0.3] as [number, number, number],  // 광원 방향 (좌상단)
-  lightAmbient: 0.4,             // 최소 밝기 (그림자 부분)
-  lightDiffuse: 0.6,             // 확산광 강도
+  lightDirection: [-0.7, 0.9, 0.7] as [number, number, number],  // 광원 방향 (좌상단)
+  lightAmbient: 0.05,            // 최소 밝기 (그림자 부분)
+  lightDiffuse: 1.0,             // 확산광 강도
   // 디버그 시각화
   showDomeDebug: false,          // 돔 영역 빨간 원 표시
 };
@@ -81,7 +84,7 @@ export const scrollConfig = {
   introEnd: 0,             // 인트로 없음
   sectionStart: 0,         // 첫 모델 즉시 시작
   sectionGap: 0.35,        // 35% 간격 (3개 모델 균등 배분)
-  sectionDuration: 0.30,   // 30% 지속
+  sectionDuration: 0.35,   // 35% 지속 (sectionGap과 동일 → 갭 없음)
   previewOffset: 0,        // 프리뷰 없음
   modelCount: 3,
 };

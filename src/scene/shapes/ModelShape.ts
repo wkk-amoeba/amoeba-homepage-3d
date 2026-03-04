@@ -154,6 +154,33 @@ export class ModelShape {
     this.baseRotZ = v;
   }
 
+  get positionX(): number {
+    return this.points?.position.x ?? 0;
+  }
+
+  set positionX(v: number) {
+    if (this.points) this.points.position.x = v;
+    if (this.instancedMesh) this.instancedMesh.position.x = v;
+  }
+
+  get positionY(): number {
+    return this.points?.position.y ?? 0;
+  }
+
+  set positionY(v: number) {
+    if (this.points) this.points.position.y = v;
+    if (this.instancedMesh) this.instancedMesh.position.y = v;
+  }
+
+  get positionZ(): number {
+    return this.points?.position.z ?? 2;
+  }
+
+  set positionZ(v: number) {
+    if (this.points) this.points.position.z = v;
+    if (this.instancedMesh) this.instancedMesh.position.z = v;
+  }
+
   // --- Mode switching ---
 
   setMode(mode: ParticleMode) {
@@ -435,8 +462,8 @@ void main() {`
             gl_PointSize *= mix(depthNearMul, depthFarMul, depthT);
             gl_PointSize *= mouseMul;
             ${lightEnabledVal ? `
-            vec3 normal = normalize(position);
-            float diff = max(dot(normal, lightDir), 0.0);
+            vec3 worldNormal = normalize(mat3(modelMatrix) * position);
+            float diff = max(dot(worldNormal, lightDir), 0.0);
             vBrightness = lightAmbient + lightDiffuse * diff;
             ` : `
             vBrightness = 1.0;
@@ -502,18 +529,18 @@ void main() {`
     }
 
     if (localProgress < enterRatio) {
-      // Enter phase: particles reform from scattered to shape
+      // Enter phase: particles reform from scattered to shape (no fade)
       const t = localProgress / enterRatio;
       const eased = this.easeOutQuad(t);
-      return { opacity: eased, scatterAmount: 1.0 - eased };
+      return { opacity: 1.0, scatterAmount: 1.0 - eased };
     } else if (localProgress < enterRatio + holdRatio) {
       // Hold phase: fully formed
       return { opacity: 1.0, scatterAmount: 0.0 };
     } else {
-      // Exit phase: particles scatter outward
+      // Exit phase: particles scatter outward (no fade)
       const t = (localProgress - enterRatio - holdRatio) / (1 - enterRatio - holdRatio);
       const eased = this.easeInQuad(t);
-      return { opacity: 1.0 - eased, scatterAmount: eased };
+      return { opacity: 1.0, scatterAmount: eased };
     }
   }
 
@@ -612,9 +639,10 @@ void main() {`
     for (let i = 0; i < this.particleCount; i++) {
       const i3 = i * 3;
 
-      const x = this.originalPositions[i3] + this.scatterOffsets[i3] * scatterAmount;
-      const y = this.originalPositions[i3 + 1] + this.scatterOffsets[i3 + 1] * scatterAmount;
-      const z = this.originalPositions[i3 + 2] + this.scatterOffsets[i3 + 2] * scatterAmount;
+      const scatter = scatterAmount * particleConfig.scatterScale;
+      const x = this.originalPositions[i3] + this.scatterOffsets[i3] * scatter;
+      const y = this.originalPositions[i3 + 1] + this.scatterOffsets[i3 + 1] * scatter;
+      const z = this.originalPositions[i3 + 2] + this.scatterOffsets[i3 + 2] * scatter;
 
       // Magnetic attraction + optional size scaling
       let targetX = 0, targetY = 0, targetZ = 0;
