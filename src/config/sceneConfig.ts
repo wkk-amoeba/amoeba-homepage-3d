@@ -101,7 +101,7 @@ export const animationPhases = {
 
 // 배경 파티클 설정 (원통형 분포 → Y축 회전 시 균일)
 export const backgroundConfig = {
-  enabled: false,         // 기본 비활성
+  enabled: true,          // 기본 활성
   count: 240,
   radius: 10,            // 원통 반경
   height: 13,            // 원통 높이 (Y축)

@@ -152,6 +152,9 @@ export class DebugPanel {
         .name('Damping');
     }
 
+    // Background reference (needed for lighting sync)
+    const bg = sceneManager.getBackground();
+
     // Lighting folder
     const lightFolder = globalFolder.addFolder('Lighting');
     const lightParams = {
@@ -164,6 +167,7 @@ export class DebugPanel {
 
     const updateLightDir = () => {
       morpher.setLightDirection(lightParams.dirX, lightParams.dirY, lightParams.dirZ);
+      bg.setLightDirection(lightParams.dirX, lightParams.dirY, lightParams.dirZ);
     };
 
     lightFolder.add(lightParams, 'dirX', -1, 1, 0.05).name('Direction X').onChange(updateLightDir);
@@ -171,15 +175,16 @@ export class DebugPanel {
     lightFolder.add(lightParams, 'dirZ', -1, 1, 0.05).name('Direction Z').onChange(updateLightDir);
     lightFolder.add(lightParams, 'ambient', 0, 1, 0.05).name('Ambient').onChange((v: number) => {
       morpher.setLightAmbient(v);
+      bg.setLightAmbient(v);
     });
     lightFolder.add(lightParams, 'diffuse', 0, 1, 0.05).name('Diffuse').onChange((v: number) => {
       morpher.setLightDiffuse(v);
+      bg.setLightDiffuse(v);
     });
 
     globalFolder.open();
 
     // Background particles folder
-    const bg = sceneManager.getBackground();
     const bgFolder = this.gui.addFolder('Background');
     const bgParams = {
       enabled: bg.visible,
