@@ -76,7 +76,7 @@ export const particleConfig = {
   lightAmbient: 0.05,            // 최소 밝기 (그림자 부분)
   lightDiffuse: 1.0,             // 확산광 강도
   // 전환 시 회전 효과 (파티클이 오브젝트 중심 주위로 회전하며 형태 형성)
-  transitionRotation: false,     // 전환 회전 on/off
+  transitionRotation: true,      // 전환 회전 on/off
   transitionRotationSpeed: 3.0,  // 회전 속도 (rad/s)
   // 디버그 시각화
   showDomeDebug: false,          // 돔 영역 빨간 원 표시
