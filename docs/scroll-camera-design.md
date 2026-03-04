@@ -13,55 +13,41 @@
 ### 스크롤 → 애니메이션 매핑
 
 스크롤 진행도(0.0~1.0)를 기준으로 각 모델에 구간을 할당.
-모델이 해당 구간에서 등장 → 정지 → 퇴장.
+모델이 해당 구간에서 파티클 scatter → reform(형성) → scatter(퇴장).
 
 ```
-스크롤 0%                                              100%
-├─ 인트로 ─┤
-            ├─ 모델0 ─┤
-                  ├─ 모델1 ─┤
-                        ├─ 모델2 ─┤
-                              ├─ 모델3 ─┤
-                                    ├─ 모델4 ─┤
-                                          ├─ 모델5 ─┤
+스크롤 0%                                        100%
+├─ 모델0 ─────┤
+          ├─ 모델1 ─────┤
+                    ├─ 모델2 ─────┤
 ```
+
+인트로 구간 없이 첫 모델이 즉시 시작. 3개 모델이 35% 간격으로 배치.
 
 각 모델 구간 내부:
 
 ```
-│ 진입 20% │   고정 60%   │ 퇴장 20% │
-│ wait→center │  center 유지  │ center→exit │
-│ 이동+페이드인 │  회전만      │ 이동+페이드아웃 │
+│ 진입 20% │      고정 60%      │ 퇴장 20% │
+│ scatter→form │  형태 유지+패럴랙스 │ form→scatter │
+│ 파티클 모임   │  마우스 인터랙션    │ 파티클 흩어짐  │
 ```
 
-### 애니메이션 타입 (객체 이동 방향)
+### 애니메이션 방식 (scatter-reform)
 
-```
-                   exit
-                    ↑
-                    │
-      wait ──→ [center] ──→ exit     (left-to-center)
-                    │
-                    ↓
-                   wait
+모델 오브젝트는 `(0, 0, 2)`에 고정. 이동 애니메이션 없음.
+파티클이 랜덤 방향에서 모여서 형태를 만들고, 퇴장 시 다시 흩어짐.
 
-      zoom-through: wait(z=15) → center(z=2) → exit(z=-10)
-      즉, 뒤에서 오다가 멈췄다가 앞으로 지나감
-```
-
-| 타입 | wait (등장) | center (고정) | exit (퇴장) |
-|------|------------|--------------|------------|
-| left-to-center | (-5, -2, 2) | (0, 0, 2) | (5, 2, 2) |
-| right-to-center | (5, -2, 2) | (0, 0, 2) | (-5, 2, 2) |
-| zoom-through | (0, 0, 15) | (0, 0, 2) | (0, 0, -10) |
-| curve-zoom | (6, -3, 2) | (0, 0, 2) | (-6, 3, 7) |
-| scatter-to-form | (3, -2, 5) | (0, 0, 2) | (-3, 2, -5) |
+- **진입**: 각 파티클이 구형 랜덤 위치(거리 5~15)에서 원래 위치로 모임 (easeOutQuad)
+- **고정**: 형태 유지. 마우스 인터랙션 (scatter, orbit, size effect, parallax)
+- **퇴장**: 원래 위치에서 다시 랜덤 방향으로 흩어짐 (easeInQuad)
+- **첫 모델 예외**: 스크롤 최상단(0%)에서 scatter 없이 즉시 형태 표시
 
 ### 현재 방식의 특징
 
-- **지그재그**: 모델마다 독립적으로 등장/퇴장, 방향만 다름
-- **카메라 고정**: 카메라는 항상 (0, 0, 8)에서 원점을 바라봄
-- **객체가 카메라로 접근**: zoom-through도 객체가 z축으로 이동하는 것 (카메라가 다가가는 게 아님)
+- **고정 위치**: 모든 모델이 `(0, 0, 2)`에 위치, 이동 없음
+- **카메라 고정**: 카메라는 항상 `(0, 0, 8)`에서 정면을 바라봄
+- **scatter-reform**: 파티클의 흩어짐/모임으로 전환 연출
+- **마우스 인터랙션**: dome 영역 내 scatter, orbit, size effect, parallax 회전
 
 ---
 
@@ -137,20 +123,20 @@
 | 카메라 이동 추가 | `SceneManager.ts` (animate에 카메라 업데이트 추가) |
 | 카메라 경로 | `sceneConfig.ts` (경로 포인트 정의), `SceneManager.ts` |
 | 애니메이션 페이즈 변경 | `sceneConfig.ts` (animationPhases 수정만으로 가능) |
-| 새 애니메이션 타입 추가 | `ModelShape.ts` (getAnimationPositions에 case 추가) |
-| L자형 구간 분리 | `SceneManager.ts` + `ModelShape.ts` (스크롤 구간 해석 로직) |
+| 마우스 인터랙션 조정 | `ModelShape.ts` (scatter/orbit/size 로직), `sceneConfig.ts` (particleConfig) |
+| 모델 추가 | `sceneConfig.ts` (models 배열 + scrollConfig.modelCount) |
 
 ## 현재 설정값 참고
 
 ```typescript
 // sceneConfig.ts
 scrollConfig = {
-  introEnd: 0.1,
-  sectionStart: 0.1,
-  sectionGap: 0.15,
-  sectionDuration: 0.13,
-  previewOffset: 0.04,
-  modelCount: 6,
+  introEnd: 0,             // 인트로 없음
+  sectionStart: 0,         // 첫 모델 즉시 시작
+  sectionGap: 0.35,        // 35% 간격 (3개 모델 균등 배분)
+  sectionDuration: 0.30,   // 30% 지속
+  previewOffset: 0,        // 프리뷰 없음
+  modelCount: 3,
 };
 
 animationPhases = {

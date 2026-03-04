@@ -8,6 +8,11 @@ export class DebugPanel {
   constructor(sceneManager: SceneManager) {
     this.gui = new GUI({ title: 'Particle Debug' });
 
+    // Collapse by default in production (build:debug)
+    if (!import.meta.env.DEV) {
+      this.gui.close();
+    }
+
     // Wait for models to load before building UI
     setTimeout(() => this.buildUI(sceneManager), 1500);
   }

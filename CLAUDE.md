@@ -22,17 +22,18 @@ public/models/
 
 src/
 ├── config/
-│   └── sceneConfig.ts       # 중앙 설정 (스크롤, 모델, 애니메이션)
+│   └── sceneConfig.ts       # 중앙 설정 (스크롤, 모델, 파티클, 애니메이션)
 ├── scene/
 │   ├── SceneManager.ts      # 씬 관리자 (진입점)
-│   ├── IntroModels.ts       # 인트로 파티클 모델
-│   ├── ParticleBackground.ts
-│   ├── ScrollHintParticles.ts
+│   ├── ParticleBackground.ts # 배경 원통형 파티클
 │   └── shapes/
 │       └── ModelShape.ts    # 파티클 렌더링 및 스크롤 애니메이션
+├── debug/
+│   └── DebugPanel.ts        # lil-gui 디버그 패널
 ├── utils/
 │   ├── scrollManager.ts     # 스크롤 상태 관리
-│   └── circleTexture.ts
+│   ├── circleTexture.ts
+│   └── shapeGenerators.ts
 └── main.ts
 ```
 
@@ -48,12 +49,11 @@ Draco 디코딩                             Float32Array
   ↓                                        ↓ 디바이스별 서브샘플링
 노드 트리 순회 + 월드 매트릭스 적용       BufferGeometry
   ↓                                        ↓ 8유닛 정규화 (ModelShape)
-균일 샘플링 (최대 15,000개)                ↓ 또는 scale×0.6 (IntroModels)
-  ↓                                      PointsMaterial (원형 텍스처)
-원점 중심 정렬                              ↓
-  ↓                                      THREE.Points → scene.add()
-Float32Array → .bin 저장                    ↓
-                                         매 프레임 스크롤 기반 애니메이션
+균일 샘플링 (최대 15,000개)              PointsMaterial (커스텀 depth 셰이더)
+  ↓                                        ↓
+원점 중심 정렬                           THREE.Points → scene.add()
+  ↓                                        ↓
+Float32Array → .bin 저장                 매 프레임 스크롤 + 마우스 인터랙션
 ```
 
 ### 빌드 타임: `scripts/extract-vertices.mjs`
@@ -67,12 +67,13 @@ Float32Array → .bin 저장                    ↓
 5. **원점 정렬**: 바운딩 박스 중심을 원점으로 이동
 6. **바이너리 저장**: `Float32Array` → `public/models/vertices/<name>.bin`
 
-### 런타임: `ModelShape.ts` / `IntroModels.ts`
+### 런타임: `ModelShape.ts`
 
 1. **fetch**: `.glb` 경로에서 `.bin` 경로를 유도하여 바이너리 로드
 2. **디바이스 서브샘플링**: `getParticleMultiplier()`로 모바일(50%), 저사양(70%) 대응
-3. **정규화**: ModelShape는 8유닛 정규화 + 모델별 scale, IntroModels는 `config.scale × 0.6`
-4. **렌더링**: `THREE.Points` + `PointsMaterial` (원형 그라데이션 텍스처)
+3. **정규화**: 8유닛 정규화 + 모델별 scale 적용
+4. **렌더링**: `THREE.Points` + `PointsMaterial` (원형 그라데이션 텍스처 + depth 기반 크기 셰이더)
+5. **마우스 인터랙션**: dome 영역 내 scatter, orbit, size effect, parallax 회전
 
 ### 바이너리 포맷 (.bin)
 
@@ -89,12 +90,12 @@ Float32Array → .bin 저장                    ↓
 ### 스크롤 타이밍
 ```typescript
 scrollConfig = {
-  introEnd: 0.1,         // 인트로 종료 지점
-  sectionStart: 0.1,     // 모델 섹션 시작
-  sectionGap: 0.15,      // 섹션 간격 (15%)
-  sectionDuration: 0.13, // 각 섹션 지속 (13%)
-  previewOffset: 0.04,   // 프리뷰 시작 오프셋
-  modelCount: 6,
+  introEnd: 0,             // 인트로 없음
+  sectionStart: 0,         // 첫 모델 즉시 시작
+  sectionGap: 0.35,        // 35% 간격 (3개 모델 균등 배분)
+  sectionDuration: 0.30,   // 30% 지속
+  previewOffset: 0,        // 프리뷰 없음
+  modelCount: 3,
 }
 ```
 
@@ -118,14 +119,17 @@ const targetSize = 8;
 const normalizeScale = targetSize / maxDimension;
 ```
 
-## 애니메이션 타입
-| 타입 | 설명 |
-|------|------|
-| `left-to-center` | 좌하단 → 중앙 → 우상단 |
-| `right-to-center` | 우하단 → 중앙 → 좌상단 |
-| `zoom-through` | 뒤 → 중앙 → 앞으로 통과 |
-| `curve-zoom` | 우하단 → 중앙 → 좌상단+뒤 |
-| `scatter-to-form` | 우중단 → 중앙 → 좌상단+앞 |
+## 애니메이션 방식
+모델 오브젝트는 `(0, 0, 2)`에 고정. 이동 애니메이션 없음.
+파티클의 scatter/reform으로 전환 연출.
+
+| 페이즈 | 동작 |
+|--------|------|
+| 진입 (20%) | 파티클이 랜덤 위치(거리 5~15)에서 원래 형태로 모임 (easeOutQuad) |
+| 고정 (60%) | 형태 유지. 마우스 인터랙션 (scatter, orbit, size, parallax) |
+| 퇴장 (20%) | 파티클이 다시 랜덤 방향으로 흩어짐 (easeInQuad) |
+
+첫 모델은 스크롤 최상단(0%)에서 scatter 없이 즉시 형태 표시.
 
 ## 개발 명령어
 ```bash
@@ -159,6 +163,6 @@ PERFORMANCE_CONFIG = {
 ## 주의사항
 - 모델 크기는 정규화되므로 `scale: 1.0`으로 시작
 - `scrollManager`는 `sceneConfig` 값을 직접 참조 (동기화 유지)
-- 파티클 크기: `0.03` (PointsMaterial.size)
+- 파티클 크기: `0.06` (PointsMaterial.size)
 - GLB 변경 시 반드시 `npm run prebuild` 재실행
 - `extract-vertices.mjs`의 MODELS 배열과 `sceneConfig.ts`의 models 배열을 동기화 유지
