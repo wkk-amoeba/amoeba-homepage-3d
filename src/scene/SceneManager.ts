@@ -145,6 +145,7 @@ export class SceneManager {
     const delta = (time - this.lastTime) / 1000;
     this.lastTime = time;
 
+    scrollManager.tick();
     const scrollProgress = scrollManager.getProgress();
 
     // Compute mouse world-space speed

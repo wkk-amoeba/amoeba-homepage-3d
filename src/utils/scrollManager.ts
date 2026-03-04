@@ -3,7 +3,9 @@ import { scrollConfig } from '../config/sceneConfig';
 export type ScrollListener = (progress: number) => void;
 
 class ScrollManager {
-  private progress = 0;
+  private targetProgress = 0;  // 스크롤 이벤트의 즉시값
+  private progress = 0;        // 스무딩된 현재값 (렌더링에 사용)
+  private smoothing = 0.05;    // lerp 속도 (0=정지, 1=즉시)
   private listeners: ScrollListener[] = [];
   private contentElement: HTMLElement | null = null;
 
@@ -15,12 +17,24 @@ class ScrollManager {
     this.contentElement = document.querySelector(contentSelector);
     window.addEventListener('scroll', this.handleScroll, { passive: true });
     this.handleScroll();
+    // 초기 위치는 즉시 동기화
+    this.progress = this.targetProgress;
   }
 
   private handleScroll() {
     if (!this.contentElement) return;
     const scrollHeight = this.contentElement.scrollHeight - window.innerHeight;
-    this.progress = Math.min(1, Math.max(0, window.scrollY / scrollHeight));
+    this.targetProgress = Math.min(1, Math.max(0, window.scrollY / scrollHeight));
+  }
+
+  /** 매 프레임 호출 — progress를 target으로 부드럽게 보간 */
+  tick() {
+    const diff = this.targetProgress - this.progress;
+    if (Math.abs(diff) < 0.0001) {
+      this.progress = this.targetProgress;
+    } else {
+      this.progress += diff * this.smoothing;
+    }
     this.listeners.forEach(fn => fn(this.progress));
     this.updateUI();
   }
