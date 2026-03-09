@@ -599,7 +599,14 @@ void main() {`
       const distToCenter = mouseWorldPos.distanceTo(objectCenter);
 
       if (distToCenter < particleConfig.activationRadius * this._userScale) {
-        localMousePos = activeObject.worldToLocal(mouseWorldPos.clone());
+        // Translate only (no rotation) so interaction zone matches the dome disc visual
+        const p = activeObject.position;
+        const invScale = 1 / this._userScale;
+        localMousePos = new THREE.Vector3(
+          (mouseWorldPos.x - p.x) * invScale,
+          (mouseWorldPos.y - p.y) * invScale,
+          (mouseWorldPos.z - p.z) * invScale,
+        );
       }
     }
 
@@ -678,18 +685,18 @@ void main() {`
 
           const activity = this.mouseActivity;
 
-          // Repel away from mouse (scatter outward, modulated by activity)
+          // Attract toward mouse or repel away (mouseAttract toggle)
           if (perpDist > 0.001) {
             const pushFactor = dome * particleConfig.mouseStrength * activity;
             const invDist = 1 / perpDist;
-            // Normalized direction × dome strength × radius (so push scales with dome area)
-            targetX = (perpX * invDist) * pushFactor * scaledMouseRadius;
-            targetY = (perpY * invDist) * pushFactor * scaledMouseRadius;
-            targetZ = (perpZ * invDist) * pushFactor * scaledMouseRadius;
+            const dir = particleConfig.mouseAttract ? -1 : 1;
+            targetX = dir * (perpX * invDist) * pushFactor * scaledMouseRadius;
+            targetY = dir * (perpY * invDist) * pushFactor * scaledMouseRadius;
+            targetZ = dir * (perpZ * invDist) * pushFactor * scaledMouseRadius;
           }
 
-          // Orbital motion (modulated by activity)
-          if (particleConfig.orbitStrength > 0 && perpDist > 0.001 && activity > 0.01) {
+          // Orbital motion (scatter mode only — attract uses pure inward pull)
+          if (!particleConfig.mouseAttract && particleConfig.orbitStrength > 0 && perpDist > 0.001 && activity > 0.01) {
             const tX = camDirLocalY * perpZ - camDirLocalZ * perpY;
             const tY = camDirLocalZ * perpX - camDirLocalX * perpZ;
             const tZ = camDirLocalX * perpY - camDirLocalY * perpX;

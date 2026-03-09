@@ -53,7 +53,8 @@ export const particleConfig = {
   mode: 'dots' as ParticleMode,
   mouseRadius: 0.3,        // 돔 반경 (로컬 유닛)
   activationRadius: 2.0,   // 마우스 근접 시 효과 활성 반경 (월드 유닛)
-  mouseStrength: 0.1,      // 마우스 반발(scatter) 강도
+  mouseAttract: true,      // true=마우스로 모임(attract), false=밀어냄(scatter)
+  mouseStrength: 0.1,      // 마우스 인터랙션 강도
   tetrahedronSize: 0.06,   // 삼각뿔 인스턴스 크기
   tetrahedronRotationSpeed: 0.5, // 삼각뿔 회전 속도 (rad/s)
   // 스프링 물리 (마우스 마그넷)

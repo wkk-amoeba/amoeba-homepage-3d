@@ -70,8 +70,12 @@ export class DebugPanel {
     }
 
     globalFolder
+      .add(particleConfig, 'mouseAttract')
+      .name('Attract (vs Scatter)');
+
+    globalFolder
       .add(globalParams, 'mouseStrength', 0.1, 3.0, 0.05)
-      .name('Scatter Strength')
+      .name('Mouse Strength')
       .onChange((v: number) => { particleConfig.mouseStrength = v; });
 
     globalFolder
