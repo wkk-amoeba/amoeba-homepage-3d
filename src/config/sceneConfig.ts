@@ -37,9 +37,9 @@ export interface ModelData {
 // 3D 모델 정의
 // geometry가 있으면 프로그래밍 생성, modelPath가 있으면 GLB .bin 로드
 export const models: ModelData[] = [
-  { id: 0, name: 'Sphere', geometry: 'sphere', scale: 0.36, position: [-1.5, 0.3, 0] },
-  { id: 1, name: 'Box', geometry: 'box', scale: 0.27, position: [0.8, -0.7, 0] },
-  { id: 2, name: 'Tetrahedron', geometry: 'tetrahedron', scale: 0.315, position: [0, 0, 0] },
+  { id: 0, name: 'Sphere', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [-1.5, 0.3, 0] },
+  { id: 1, name: 'Box', modelPath: '/models/high_cube.glb', scale: 0.27, position: [0.8, -0.7, 0] },
+  { id: 2, name: 'Cone', modelPath: '/models/high_cone.glb', scale: 0.315, position: [0, 0, 0] },
 ];
 
 // 파티클 렌더링 모드

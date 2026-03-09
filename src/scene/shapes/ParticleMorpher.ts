@@ -121,7 +121,7 @@ export class ParticleMorpher {
 
   // --- Shape loading ---
 
-  private loadShapes(modelConfigs: ModelData[]) {
+  private async loadShapes(modelConfigs: ModelData[]) {
     const multiplier = getParticleMultiplier();
     const baseCount = PERFORMANCE_CONFIG.maxVerticesPerModel;
     this.particleCount = Math.floor(baseCount * multiplier);
@@ -132,11 +132,52 @@ export class ParticleMorpher {
       if (config.geometry) {
         positions = createShapePoints(config.geometry, this.particleCount);
       } else if (config.modelPath) {
-        // GLB pipeline would go here — skip for now
-        console.warn(`GLB path not supported in ParticleMorpher: ${config.modelPath}`);
-        positions = createShapePoints('sphere', this.particleCount);
+        // GLB .bin pipeline
+        const binPath = config.modelPath
+          .replace('/models/', '/models/vertices/')
+          .replace('.glb', '.bin');
+
+        try {
+          const response = await fetch(binPath);
+          if (!response.ok) throw new Error(`${response.status}`);
+          const arrayBuffer = await response.arrayBuffer();
+          const rawPositions = new Float32Array(arrayBuffer);
+          const rawCount = rawPositions.length / 3;
+
+          // Sub-sample or pad to match particleCount
+          if (rawCount >= this.particleCount) {
+            const step = Math.max(1, Math.ceil(rawCount / this.particleCount));
+            const sampled: number[] = [];
+            for (let i = 0; i < rawCount && sampled.length / 3 < this.particleCount; i++) {
+              if (i % step === 0) {
+                sampled.push(rawPositions[i * 3], rawPositions[i * 3 + 1], rawPositions[i * 3 + 2]);
+              }
+            }
+            positions = new Float32Array(sampled);
+          } else {
+            // Repeat points to fill particleCount
+            positions = new Float32Array(this.particleCount * 3);
+            for (let i = 0; i < this.particleCount; i++) {
+              const src = (i % rawCount) * 3;
+              positions[i * 3] = rawPositions[src];
+              positions[i * 3 + 1] = rawPositions[src + 1];
+              positions[i * 3 + 2] = rawPositions[src + 2];
+            }
+          }
+          console.log(`ParticleMorpher: loaded ${config.name} from ${binPath} (${rawCount} → ${positions.length / 3} pts)`);
+        } catch (err) {
+          console.error(`ParticleMorpher: failed to load ${binPath}, falling back to sphere`, err);
+          positions = createShapePoints('sphere', this.particleCount);
+        }
       } else {
         positions = createShapePoints('sphere', this.particleCount);
+      }
+
+      // Ensure positions array is exactly particleCount * 3
+      if (positions.length / 3 !== this.particleCount) {
+        const adjusted = new Float32Array(this.particleCount * 3);
+        adjusted.set(positions.subarray(0, Math.min(positions.length, adjusted.length)));
+        positions = adjusted;
       }
 
       // Normalize to 8 units + apply scale

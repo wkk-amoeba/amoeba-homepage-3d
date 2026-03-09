@@ -286,11 +286,13 @@ export class ModelShape {
         const count = Math.floor(baseCount * multiplier);
         sampledPositions = createShapePoints(this.data.geometry, count);
         this._totalParticleCount = count;
+        console.log(`[DEBUG] ${this.data.name}: using PROGRAMMATIC geometry "${this.data.geometry}"`);
       } else if (this.data.modelPath) {
         // GLB .bin pipeline
         const binPath = this.data.modelPath
           .replace('/models/', '/models/vertices/')
           .replace('.glb', '.bin');
+        console.log(`[DEBUG] ${this.data.name}: loading BIN from "${binPath}"`);
 
         const response = await fetch(binPath);
         if (!response.ok) {
