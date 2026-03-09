@@ -64,6 +64,11 @@ export class ModelShape {
   private lightAmbientUniform = { value: particleConfig.lightAmbient };
   private lightDiffuseUniform = { value: particleConfig.lightDiffuse };
 
+  // Per-particle micro-orbit axes (precomputed at load)
+  private orbitAxis1: Float32Array = new Float32Array(0);
+  private orbitAxis2: Float32Array = new Float32Array(0);
+  private microTime = 0.0;
+
   constructor(scene: THREE.Scene, data: ModelData, sectionIndex: number) {
     this.scene = scene;
     this.data = data;
@@ -387,6 +392,25 @@ export class ModelShape {
         this.scatterOffsets[i3 + 2] = Math.cos(phi) * magnitude;
       }
 
+      // Precompute per-particle orbit axes from scatterOffsets
+      this.orbitAxis1 = new Float32Array(this.particleCount * 3);
+      this.orbitAxis2 = new Float32Array(this.particleCount * 3);
+      for (let i = 0; i < this.particleCount; i++) {
+        const i3 = i * 3;
+        const nx = this.scatterOffsets[i3], ny = this.scatterOffsets[i3 + 1], nz = this.scatterOffsets[i3 + 2];
+        const nLen = Math.sqrt(nx * nx + ny * ny + nz * nz);
+        const ux = nx / nLen, uy = ny / nLen, uz = nz / nLen;
+        let px: number, py: number, pz: number;
+        if (Math.abs(ux) < 0.9) { px = 0; py = uz; pz = -uy; }
+        else                     { px = -uz; py = 0; pz = ux; }
+        const pLen = Math.sqrt(px * px + py * py + pz * pz);
+        px /= pLen; py /= pLen; pz /= pLen;
+        this.orbitAxis1[i3] = px; this.orbitAxis1[i3 + 1] = py; this.orbitAxis1[i3 + 2] = pz;
+        this.orbitAxis2[i3]     = uy * pz - uz * py;
+        this.orbitAxis2[i3 + 1] = uz * px - ux * pz;
+        this.orbitAxis2[i3 + 2] = ux * py - uy * px;
+      }
+
       // Initialize mouse offset and velocity (all zeros)
       this.mouseOffset = new Float32Array(this.particleCount * 3);
       this.mouseVelocity = new Float32Array(this.particleCount * 3);
@@ -437,7 +461,6 @@ export class ModelShape {
         shader.uniforms.lightDir = lightDirUniform;
         shader.uniforms.lightAmbient = lightAmbientUniform;
         shader.uniforms.lightDiffuse = lightDiffuseUniform;
-
         // Add uniforms + varying at global scope (vertex)
         shader.vertexShader = shader.vertexShader.replace(
           'void main() {',
@@ -555,6 +578,7 @@ void main() {`
     // Sync depth multiplier uniforms from config
     this.depthNearMulUniform.value = particleConfig.depthNearMul;
     this.depthFarMulUniform.value = particleConfig.depthFarMul;
+    this.microTime += delta;
 
     // Quick exit if fully invisible and no mouse offset to decay
     const currentOpacity = this.currentMode === 'tetrahedron' && this.instancedMesh
@@ -757,9 +781,20 @@ void main() {`
         }
       }
 
-      this.currentPositions[i3] = x + this.mouseOffset[i3];
-      this.currentPositions[i3 + 1] = y + this.mouseOffset[i3 + 1];
-      this.currentPositions[i3 + 2] = z + this.mouseOffset[i3 + 2];
+      // Per-particle micro-orbit around base position
+      let orbitX = 0, orbitY = 0, orbitZ = 0;
+      const noiseAmp = particleConfig.microNoiseAmp;
+      if (noiseAmp > 0) {
+        const angle = this.microTime * particleConfig.microNoiseSpeed + this.scatterOffsets[i3];
+        const cosA = Math.cos(angle), sinA = Math.sin(angle);
+        orbitX = (this.orbitAxis1[i3]     * cosA + this.orbitAxis2[i3]     * sinA) * noiseAmp;
+        orbitY = (this.orbitAxis1[i3 + 1] * cosA + this.orbitAxis2[i3 + 1] * sinA) * noiseAmp;
+        orbitZ = (this.orbitAxis1[i3 + 2] * cosA + this.orbitAxis2[i3 + 2] * sinA) * noiseAmp;
+      }
+
+      this.currentPositions[i3]     = x + this.mouseOffset[i3]     + orbitX;
+      this.currentPositions[i3 + 1] = y + this.mouseOffset[i3 + 1] + orbitY;
+      this.currentPositions[i3 + 2] = z + this.mouseOffset[i3 + 2] + orbitZ;
     }
 
     // --- Mode-specific rendering ---

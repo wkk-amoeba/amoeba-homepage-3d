@@ -57,6 +57,10 @@ export class ParticleMorpher {
   private lightDiffuseUniform = { value: particleConfig.lightDiffuse };
   private shapeCenterUniform = { value: new THREE.Vector3(0, 0, 0) };
 
+  // Per-particle micro-orbit axes (precomputed at load)
+  private orbitAxis1: Float32Array = new Float32Array(0);
+  private orbitAxis2: Float32Array = new Float32Array(0);
+
   // Debug
   private _userScale = 1.0;
 
@@ -235,6 +239,27 @@ export class ParticleMorpher {
       this.scatterOffsets[i3] = Math.sin(phi) * Math.cos(theta) * magnitude;
       this.scatterOffsets[i3 + 1] = Math.sin(phi) * Math.sin(theta) * magnitude;
       this.scatterOffsets[i3 + 2] = Math.cos(phi) * magnitude;
+    }
+
+    // Precompute per-particle orbit axes from scatterOffsets (normalized)
+    this.orbitAxis1 = new Float32Array(this.particleCount * 3);
+    this.orbitAxis2 = new Float32Array(this.particleCount * 3);
+    for (let i = 0; i < this.particleCount; i++) {
+      const i3 = i * 3;
+      const nx = this.scatterOffsets[i3], ny = this.scatterOffsets[i3 + 1], nz = this.scatterOffsets[i3 + 2];
+      const nLen = Math.sqrt(nx * nx + ny * ny + nz * nz);
+      const ux = nx / nLen, uy = ny / nLen, uz = nz / nLen;
+      // First perpendicular via cross with axis-aligned vector
+      let px: number, py: number, pz: number;
+      if (Math.abs(ux) < 0.9) { px = 0; py = uz; pz = -uy; }
+      else                     { px = -uz; py = 0; pz = ux; }
+      const pLen = Math.sqrt(px * px + py * py + pz * pz);
+      px /= pLen; py /= pLen; pz /= pLen;
+      this.orbitAxis1[i3] = px; this.orbitAxis1[i3 + 1] = py; this.orbitAxis1[i3 + 2] = pz;
+      // Second perpendicular: cross(u, p)
+      this.orbitAxis2[i3]     = uy * pz - uz * py;
+      this.orbitAxis2[i3 + 1] = uz * px - ux * pz;
+      this.orbitAxis2[i3 + 2] = ux * py - uy * px;
     }
 
     // Set initial positions to first shape
@@ -634,9 +659,20 @@ void main() {`
         }
       }
 
-      this.currentPositions[i3] = baseX + this.mouseOffset[i3];
-      this.currentPositions[i3 + 1] = baseY + this.mouseOffset[i3 + 1];
-      this.currentPositions[i3 + 2] = baseZ + this.mouseOffset[i3 + 2];
+      // Per-particle micro-orbit around base position
+      let orbitX = 0, orbitY = 0, orbitZ = 0;
+      const noiseAmp = particleConfig.microNoiseAmp;
+      if (noiseAmp > 0) {
+        const angle = this.orbitTime * particleConfig.microNoiseSpeed + this.scatterOffsets[i3];
+        const cosA = Math.cos(angle), sinA = Math.sin(angle);
+        orbitX = (this.orbitAxis1[i3]     * cosA + this.orbitAxis2[i3]     * sinA) * noiseAmp;
+        orbitY = (this.orbitAxis1[i3 + 1] * cosA + this.orbitAxis2[i3 + 1] * sinA) * noiseAmp;
+        orbitZ = (this.orbitAxis1[i3 + 2] * cosA + this.orbitAxis2[i3 + 2] * sinA) * noiseAmp;
+      }
+
+      this.currentPositions[i3]     = baseX + this.mouseOffset[i3]     + orbitX;
+      this.currentPositions[i3 + 1] = baseY + this.mouseOffset[i3 + 1] + orbitY;
+      this.currentPositions[i3 + 2] = baseZ + this.mouseOffset[i3 + 2] + orbitZ;
     }
 
     // Update geometry buffers

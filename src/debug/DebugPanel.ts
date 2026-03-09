@@ -70,6 +70,14 @@ export class DebugPanel {
     }
 
     globalFolder
+      .add(particleConfig, 'microNoiseAmp', 0, 0.1, 0.001)
+      .name('Micro Orbit Radius');
+
+    globalFolder
+      .add(particleConfig, 'microNoiseSpeed', 0, 3.0, 0.05)
+      .name('Micro Orbit Speed');
+
+    globalFolder
       .add(particleConfig, 'mouseAttract')
       .name('Attract (vs Scatter)');
 

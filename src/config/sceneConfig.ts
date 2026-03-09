@@ -55,6 +55,8 @@ export const particleConfig = {
   activationRadius: 2.0,   // 마우스 근접 시 효과 활성 반경 (월드 유닛)
   mouseAttract: true,      // true=마우스로 모임(attract), false=밀어냄(scatter)
   mouseStrength: 0.1,      // 마우스 인터랙션 강도
+  microNoiseAmp: 0.015,    // 파티클 미세 공전 반지름 (0 = 비활성)
+  microNoiseSpeed: 0.4,   // 미세 공전 속도 (rad/s)
   tetrahedronSize: 0.06,   // 삼각뿔 인스턴스 크기
   tetrahedronRotationSpeed: 0.5, // 삼각뿔 회전 속도 (rad/s)
   // 스프링 물리 (마우스 마그넷)
