@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { scrollManager } from '../utils/scrollManager';
 import { ParticleBackground } from './ParticleBackground';
-import { ModelShape } from './shapes/ModelShape';
+import { ParticleMorpher } from './shapes/ParticleMorpher';
 import { models, particleConfig } from '../config/sceneConfig';
 
 export class SceneManager {
@@ -11,7 +11,7 @@ export class SceneManager {
   private container: HTMLElement;
 
   private background: ParticleBackground;
-  private modelObjects: ModelShape[] = [];
+  private particleMorpher: ParticleMorpher | null = null;
 
   private lastTime = 0;
   private animationId: number | null = null;
@@ -81,7 +81,7 @@ export class SceneManager {
 
     // Create objects
     this.background = new ParticleBackground(this.scene);
-    this.createModels();
+    this.particleMorpher = new ParticleMorpher(this.scene, models);
 
     // Event listeners
     this.handleResize = this.handleResize.bind(this);
@@ -105,13 +105,6 @@ export class SceneManager {
     const pointLight = new THREE.PointLight(0xec4899, 0.5);
     pointLight.position.set(-10, -10, -5);
     this.scene.add(pointLight);
-  }
-
-  private createModels() {
-    models.forEach((modelData, index) => {
-      const model = new ModelShape(this.scene, modelData, index);
-      this.modelObjects.push(model);
-    });
   }
 
   private handleResize() {
@@ -152,6 +145,7 @@ export class SceneManager {
     const delta = (time - this.lastTime) / 1000;
     this.lastTime = time;
 
+    scrollManager.tick();
     const scrollProgress = scrollManager.getProgress();
 
     // Compute mouse world-space speed
@@ -167,7 +161,9 @@ export class SceneManager {
 
     // Update all objects
     this.background.update(delta);
-    this.modelObjects.forEach(model => model.update(delta, scrollProgress, this.mouseWorldPos, this.mouse, this.mouseSpeed));
+    if (this.particleMorpher) {
+      this.particleMorpher.update(delta, scrollProgress, this.mouseWorldPos, this.mouse, this.mouseSpeed);
+    }
 
     // Update dome debug disc
     if (particleConfig.showDomeDebug && this.mouseWorldPos) {
@@ -185,8 +181,8 @@ export class SceneManager {
     this.renderer.render(this.scene, this.camera);
   }
 
-  getModels(): ModelShape[] {
-    return this.modelObjects;
+  getMorpher(): ParticleMorpher | null {
+    return this.particleMorpher;
   }
 
   getBackground(): ParticleBackground {
@@ -202,7 +198,7 @@ export class SceneManager {
     window.removeEventListener('mouseleave', this.handleMouseLeave);
     scrollManager.destroy();
 
-    this.modelObjects.forEach(model => model.dispose());
+    if (this.particleMorpher) this.particleMorpher.dispose();
 
     this.domeDisc.geometry.dispose();
     (this.domeDisc.material as THREE.Material).dispose();

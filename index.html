@@ -12,49 +12,34 @@
   <!-- 3D Canvas Container -->
   <div id="canvas-container" class="fixed inset-0 -z-10"></div>
 
-  <!-- Content Container -->
-  <div id="content">
-    <!-- Model Sections -->
-    <section class="shape-section relative z-10 flex min-h-screen flex-col items-center justify-center px-6" data-index="0">
-      <div class="shape-content text-center opacity-0 translate-y-10 transition-all duration-700">
-        <div class="mb-4 inline-block rounded-full px-4 py-2 text-sm font-medium bg-white/10 text-white/80">01</div>
-        <h2 class="mb-4 text-5xl font-bold md:text-7xl">Light Bulb</h2>
-        <p class="max-w-md text-xl text-white/70">빛을 밝히는 아이디어의 상징</p>
-      </div>
-    </section>
-
-    <section class="shape-section relative z-10 flex min-h-screen flex-col items-center justify-center px-6" data-index="1">
-      <div class="shape-content text-center opacity-0 translate-y-10 transition-all duration-700">
-        <div class="mb-4 inline-block rounded-full px-4 py-2 text-sm font-medium bg-white/10 text-white/80">02</div>
-        <h2 class="mb-4 text-5xl font-bold md:text-7xl">Porsche 911</h2>
-        <p class="max-w-md text-xl text-white/70">시대를 초월한 스포츠카의 아이콘</p>
-      </div>
-    </section>
-
-    <section class="shape-section relative z-10 flex min-h-screen flex-col items-center justify-center px-6" data-index="2">
-      <div class="shape-content text-center opacity-0 translate-y-10 transition-all duration-700">
-        <div class="mb-4 inline-block rounded-full px-4 py-2 text-sm font-medium bg-white/10 text-white/80">03</div>
-        <h2 class="mb-4 text-5xl font-bold md:text-7xl">Henchman</h2>
-        <p class="max-w-md text-xl text-white/70">강인한 캐릭터의 디테일한 형상</p>
-      </div>
-    </section>
-
-    <!-- Final Section -->
-    <section class="relative z-10 flex min-h-screen flex-col items-center justify-center px-6">
-      <div class="text-center">
-        <h2 class="mb-6 text-5xl font-bold md:text-7xl">Explore More</h2>
-        <p class="mb-8 max-w-2xl text-xl text-white/70">3D 웹의 무한한 가능성을 경험하세요</p>
-        <div class="flex flex-wrap justify-center gap-4">
-          <button class="rounded-full bg-white px-8 py-3 font-semibold text-black transition-transform hover:scale-105">
-            Get Started
-          </button>
-          <button class="rounded-full border-2 border-white/30 px-8 py-3 font-semibold text-white backdrop-blur-sm transition-all hover:border-white/60 hover:bg-white/10">
-            Learn More
-          </button>
-        </div>
-      </div>
-    </section>
+  <!-- Fixed text overlays (화면 중앙 고정, fade in/out) -->
+  <div class="shape-section fixed inset-0 z-10 flex items-center justify-center pointer-events-none" data-index="0">
+    <div class="shape-content text-center opacity-0">
+      <div class="mb-4 inline-block rounded-full px-4 py-2 text-sm font-medium bg-white/10 text-white/80">01</div>
+      <h2 class="mb-4 text-5xl font-bold md:text-7xl">Sphere</h2>
+      <p class="max-w-md text-xl text-white/70">완벽한 대칭의 구</p>
+    </div>
   </div>
+
+  <div class="shape-section fixed inset-0 z-10 flex items-center justify-center pointer-events-none" data-index="1">
+    <div class="shape-content text-center opacity-0">
+      <div class="mb-4 inline-block rounded-full px-4 py-2 text-sm font-medium bg-white/10 text-white/80">02</div>
+      <h2 class="mb-4 text-5xl font-bold md:text-7xl">Box</h2>
+      <p class="max-w-md text-xl text-white/70">견고한 육면체</p>
+    </div>
+  </div>
+
+  <div class="shape-section fixed inset-0 z-10 flex items-center justify-center pointer-events-none" data-index="2">
+    <div class="shape-content text-center opacity-0">
+      <div class="mb-4 inline-block rounded-full px-4 py-2 text-sm font-medium bg-white/10 text-white/80">03</div>
+      <h2 class="mb-4 text-5xl font-bold md:text-7xl">Tetrahedron</h2>
+      <p class="max-w-md text-xl text-white/70">가장 단순한 다면체</p>
+    </div>
+  </div>
+
+  <!-- Scroll spacer (스크롤 높이 확보) -->
+  <div id="content" style="height: 400vh;"></div>
+
 
   <!-- Scroll Progress Indicator -->
   <div id="scroll-indicator" class="fixed bottom-8 right-8 z-50 flex flex-col items-center gap-2">

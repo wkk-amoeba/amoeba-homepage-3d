@@ -18,9 +18,12 @@ import path from 'node:path';
 // Config  (keep in sync with src/config/sceneConfig.ts)
 // -------------------------------------------------------------------
 const MODELS = [
-  { name: 'light-bulb', file: 'light-bulb.glb' },
-  { name: 'porsche_911_carrera_4s', file: 'porsche_911_carrera_4s.glb' },
-  { name: 'HenchmanTough', file: 'HenchmanTough.glb' },
+  { name: 'low_sphere', file: 'low_sphere.glb' },
+  { name: 'low_cube', file: 'low_cube.glb' },
+  { name: 'low_cone', file: 'low_cone.glb' },
+  { name: 'high_shpere', file: 'high_shpere.glb' },
+  { name: 'high_cube', file: 'high_cube.glb' },
+  { name: 'high_cone', file: 'high_cone.glb' },
 ];
 
 const MAX_VERTICES = 15_000;
@@ -92,14 +95,14 @@ function transformPoint(m, x, y, z) {
 }
 
 // -------------------------------------------------------------------
-// Vertex extraction
+// Triangle extraction (world-space)
 // -------------------------------------------------------------------
 
-function extractVertices(document) {
-  const allVertices = [];
+function extractTriangles(document) {
+  const triangles = []; // array of { v0, v1, v2 } (each vec3)
   const root = document.getRoot();
   const defaultScene = root.getDefaultScene() || root.listScenes()[0];
-  if (!defaultScene) return allVertices;
+  if (!defaultScene) return triangles;
 
   function traverse(nodes, parentWorld) {
     for (const node of nodes) {
@@ -114,14 +117,28 @@ function extractVertices(document) {
         for (const prim of mesh.listPrimitives()) {
           const posAccessor = prim.getAttribute('POSITION');
           if (!posAccessor) continue;
-          const arr = posAccessor.getArray();
-          const count = posAccessor.getCount();
-          for (let i = 0; i < count; i++) {
-            const x = arr[i * 3];
-            const y = arr[i * 3 + 1];
-            const z = arr[i * 3 + 2];
-            const [wx, wy, wz] = transformPoint(world, x, y, z);
-            allVertices.push(wx, wy, wz);
+          const pos = posAccessor.getArray();
+          const indices = prim.getIndices();
+
+          if (indices) {
+            const idxArr = indices.getArray();
+            for (let i = 0; i < idxArr.length; i += 3) {
+              const i0 = idxArr[i], i1 = idxArr[i + 1], i2 = idxArr[i + 2];
+              triangles.push({
+                v0: transformPoint(world, pos[i0 * 3], pos[i0 * 3 + 1], pos[i0 * 3 + 2]),
+                v1: transformPoint(world, pos[i1 * 3], pos[i1 * 3 + 1], pos[i1 * 3 + 2]),
+                v2: transformPoint(world, pos[i2 * 3], pos[i2 * 3 + 1], pos[i2 * 3 + 2]),
+              });
+            }
+          } else {
+            const count = posAccessor.getCount();
+            for (let i = 0; i < count; i += 3) {
+              triangles.push({
+                v0: transformPoint(world, pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]),
+                v1: transformPoint(world, pos[(i + 1) * 3], pos[(i + 1) * 3 + 1], pos[(i + 1) * 3 + 2]),
+                v2: transformPoint(world, pos[(i + 2) * 3], pos[(i + 2) * 3 + 1], pos[(i + 2) * 3 + 2]),
+              });
+            }
           }
         }
       }
@@ -131,26 +148,66 @@ function extractVertices(document) {
   }
 
   traverse(defaultScene.listChildren(), mat4Identity());
-  return allVertices;
+  return triangles;
 }
 
 // -------------------------------------------------------------------
-// Sample, center, write
+// Surface sampling: uniformly sample points on triangle surfaces
 // -------------------------------------------------------------------
 
-function sampleAndCenter(allVertices) {
-  const totalCount = allVertices.length / 3;
-  const targetCount = Math.min(MAX_VERTICES, totalCount);
-  const step = Math.max(1, Math.ceil(totalCount / targetCount));
+function triangleArea(v0, v1, v2) {
+  const ax = v1[0] - v0[0], ay = v1[1] - v0[1], az = v1[2] - v0[2];
+  const bx = v2[0] - v0[0], by = v2[1] - v0[1], bz = v2[2] - v0[2];
+  const cx = ay * bz - az * by;
+  const cy = az * bx - ax * bz;
+  const cz = ax * by - ay * bx;
+  return 0.5 * Math.sqrt(cx * cx + cy * cy + cz * cz);
+}
 
-  const sampled = [];
-  for (let i = 0; i < totalCount; i++) {
-    if (i % step === 0) {
-      sampled.push(allVertices[i * 3], allVertices[i * 3 + 1], allVertices[i * 3 + 2]);
-    }
+function sampleTriangleSurface(triangles, targetCount) {
+  // Compute cumulative area distribution
+  const areas = triangles.map(t => triangleArea(t.v0, t.v1, t.v2));
+  const totalArea = areas.reduce((s, a) => s + a, 0);
+  const cdf = new Float64Array(areas.length);
+  cdf[0] = areas[0];
+  for (let i = 1; i < areas.length; i++) {
+    cdf[i] = cdf[i - 1] + areas[i];
   }
 
-  // Center at origin
+  // Sample points proportional to triangle area
+  const sampled = [];
+  for (let n = 0; n < targetCount; n++) {
+    // Pick triangle weighted by area
+    const r = Math.random() * totalArea;
+    let idx = 0;
+    let lo = 0, hi = cdf.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (cdf[mid] < r) lo = mid + 1;
+      else hi = mid;
+    }
+    idx = lo;
+
+    const { v0, v1, v2 } = triangles[idx];
+    // Random point on triangle (barycentric)
+    let u = Math.random(), v = Math.random();
+    if (u + v > 1) { u = 1 - u; v = 1 - v; }
+    const w = 1 - u - v;
+    sampled.push(
+      w * v0[0] + u * v1[0] + v * v2[0],
+      w * v0[1] + u * v1[1] + v * v2[1],
+      w * v0[2] + u * v1[2] + v * v2[2],
+    );
+  }
+
+  return sampled;
+}
+
+// -------------------------------------------------------------------
+// Center at origin
+// -------------------------------------------------------------------
+
+function centerPoints(sampled) {
   let minX = Infinity, minY = Infinity, minZ = Infinity;
   let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
   for (let i = 0; i < sampled.length; i += 3) {
@@ -171,7 +228,7 @@ function sampleAndCenter(allVertices) {
     sampled[i + 2] -= cz;
   }
 
-  return { sampled, totalCount, sampledCount: sampled.length / 3 };
+  return sampled;
 }
 
 // -------------------------------------------------------------------
@@ -200,23 +257,26 @@ async function main() {
     }
 
     const document = await io.read(glbPath);
-    const allVertices = extractVertices(document);
+    const triangles = extractTriangles(document);
 
-    if (allVertices.length === 0) {
-      console.warn(`  SKIP: ${model.name} has no vertices`);
+    if (triangles.length === 0) {
+      console.warn(`  SKIP: ${model.name} has no triangles`);
       continue;
     }
 
-    const { sampled, totalCount, sampledCount } = sampleAndCenter(allVertices);
+    const targetCount = MAX_VERTICES;
+    const sampled = sampleTriangleSurface(triangles, targetCount);
+    centerPoints(sampled);
     const float32 = new Float32Array(sampled);
+    const sampledCount = sampled.length / 3;
     const binName = model.file.replace('.glb', '.bin');
     const outPath = path.join(outputDir, binName);
 
     fs.writeFileSync(outPath, Buffer.from(float32.buffer));
 
     console.log(
-      `  ${model.name}: ${sampledCount} vertices ` +
-      `(sampled from ${totalCount}), ${float32.byteLength} bytes → ${binName}`
+      `  ${model.name}: ${sampledCount} points ` +
+      `(from ${triangles.length} triangles), ${float32.byteLength} bytes → ${binName}`
     );
   }
 

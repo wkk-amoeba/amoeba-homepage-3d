@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { getCircleTexture } from '../../utils/circleTexture';
 import { ModelData, ParticleMode, scrollConfig, animationPhases, particleConfig, getParticleMultiplier, PERFORMANCE_CONFIG } from '../../config/sceneConfig';
+import { createShapePoints } from '../../utils/shapeGenerators';
 
 export class ModelShape {
   private scene: THREE.Scene;
@@ -57,6 +58,11 @@ export class ModelShape {
   private depthFarMulUniform = { value: particleConfig.depthFarMul };
   private localZMinUniform = { value: -4.0 };
   private localZMaxUniform = { value: 4.0 };
+
+  // Lighting uniforms (shared across frames, updated by debug panel)
+  private lightDirUniform: { value: THREE.Vector3 } | null = null;
+  private lightAmbientUniform = { value: particleConfig.lightAmbient };
+  private lightDiffuseUniform = { value: particleConfig.lightDiffuse };
 
   constructor(scene: THREE.Scene, data: ModelData, sectionIndex: number) {
     this.scene = scene;
@@ -148,6 +154,33 @@ export class ModelShape {
     this.baseRotZ = v;
   }
 
+  get positionX(): number {
+    return this.points?.position.x ?? 0;
+  }
+
+  set positionX(v: number) {
+    if (this.points) this.points.position.x = v;
+    if (this.instancedMesh) this.instancedMesh.position.x = v;
+  }
+
+  get positionY(): number {
+    return this.points?.position.y ?? 0;
+  }
+
+  set positionY(v: number) {
+    if (this.points) this.points.position.y = v;
+    if (this.instancedMesh) this.instancedMesh.position.y = v;
+  }
+
+  get positionZ(): number {
+    return this.points?.position.z ?? 2;
+  }
+
+  set positionZ(v: number) {
+    if (this.points) this.points.position.z = v;
+    if (this.instancedMesh) this.instancedMesh.position.z = v;
+  }
+
   // --- Mode switching ---
 
   setMode(mode: ParticleMode) {
@@ -224,48 +257,79 @@ export class ModelShape {
     this.scene.add(this.instancedMesh);
   }
 
+  // Lighting accessors for debug panel
+  setLightDirection(x: number, y: number, z: number) {
+    if (this.lightDirUniform) {
+      const len = Math.sqrt(x * x + y * y + z * z);
+      this.lightDirUniform.value.set(x / len, y / len, z / len);
+    }
+  }
+
+  setLightAmbient(v: number) {
+    this.lightAmbientUniform.value = v;
+  }
+
+  setLightDiffuse(v: number) {
+    this.lightDiffuseUniform.value = v;
+  }
+
   // --- End debug panel accessors ---
 
   private async loadModel() {
     try {
-      // Derive .bin path from .glb path
-      const binPath = this.data.modelPath
-        .replace('/models/', '/models/vertices/')
-        .replace('.glb', '.bin');
-
-      const response = await fetch(binPath);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch ${binPath}: ${response.status}`);
-      }
-
-      const arrayBuffer = await response.arrayBuffer();
-      const positions = new Float32Array(arrayBuffer);
-      this._totalParticleCount = positions.length / 3;
-
-      if (this._totalParticleCount === 0) {
-        console.error(`No vertices in pre-extracted file: ${this.data.name}`);
-        return;
-      }
-
-      // Uniform sub-sampling for lower-end devices
-      const multiplier = this.data.particleCount !== undefined
-        ? Math.min(this.data.particleCount, this._totalParticleCount) / this._totalParticleCount
-        : getParticleMultiplier();
-
       let sampledPositions: Float32Array;
-      if (multiplier < 1.0) {
-        const targetCount = Math.floor(this._totalParticleCount * multiplier);
-        const step = Math.max(1, Math.ceil(this._totalParticleCount / targetCount));
-        const sampled: number[] = [];
-        for (let i = 0; i < this._totalParticleCount; i++) {
-          if (i % step === 0) {
-            const base = i * 3;
-            sampled.push(positions[base], positions[base + 1], positions[base + 2]);
-          }
+
+      if (this.data.geometry) {
+        // Programmatic shape generation
+        const baseCount = this.data.particleCount ?? PERFORMANCE_CONFIG.maxVerticesPerModel;
+        const multiplier = getParticleMultiplier();
+        const count = Math.floor(baseCount * multiplier);
+        sampledPositions = createShapePoints(this.data.geometry, count);
+        this._totalParticleCount = count;
+        console.log(`[DEBUG] ${this.data.name}: using PROGRAMMATIC geometry "${this.data.geometry}"`);
+      } else if (this.data.modelPath) {
+        // GLB .bin pipeline
+        const binPath = this.data.modelPath
+          .replace('/models/', '/models/vertices/')
+          .replace('.glb', '.bin');
+        console.log(`[DEBUG] ${this.data.name}: loading BIN from "${binPath}"`);
+
+        const response = await fetch(binPath);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch ${binPath}: ${response.status}`);
         }
-        sampledPositions = new Float32Array(sampled);
+
+        const arrayBuffer = await response.arrayBuffer();
+        const positions = new Float32Array(arrayBuffer);
+        this._totalParticleCount = positions.length / 3;
+
+        if (this._totalParticleCount === 0) {
+          console.error(`No vertices in pre-extracted file: ${this.data.name}`);
+          return;
+        }
+
+        // Uniform sub-sampling for lower-end devices
+        const multiplier = this.data.particleCount !== undefined
+          ? Math.min(this.data.particleCount, this._totalParticleCount) / this._totalParticleCount
+          : getParticleMultiplier();
+
+        if (multiplier < 1.0) {
+          const targetCount = Math.floor(this._totalParticleCount * multiplier);
+          const step = Math.max(1, Math.ceil(this._totalParticleCount / targetCount));
+          const sampled: number[] = [];
+          for (let i = 0; i < this._totalParticleCount; i++) {
+            if (i % step === 0) {
+              const base = i * 3;
+              sampled.push(positions[base], positions[base + 1], positions[base + 2]);
+            }
+          }
+          sampledPositions = new Float32Array(sampled);
+        } else {
+          sampledPositions = new Float32Array(positions);
+        }
       } else {
-        sampledPositions = new Float32Array(positions);
+        console.error(`No geometry or modelPath for: ${this.data.name}`);
+        return;
       }
 
       this.particleCount = sampledPositions.length / 3;
@@ -350,24 +414,46 @@ export class ModelShape {
         alphaMap: getCircleTexture(),
       });
 
-      // Inject depth-based size multiplier into vertex shader
+      // Inject depth-based size multiplier + fake lighting into shaders
       const nearMulRef = this.depthNearMulUniform;
       const farMulRef = this.depthFarMulUniform;
       const zMinRef = this.localZMinUniform;
       const zMaxRef = this.localZMaxUniform;
+
+      // Normalize light direction into class-level uniform
+      const ld = particleConfig.lightDirection;
+      const ldLen = Math.sqrt(ld[0] * ld[0] + ld[1] * ld[1] + ld[2] * ld[2]);
+      this.lightDirUniform = { value: new THREE.Vector3(ld[0] / ldLen, ld[1] / ldLen, ld[2] / ldLen) };
+      const lightDirUniform = this.lightDirUniform;
+      const lightAmbientUniform = this.lightAmbientUniform;
+      const lightDiffuseUniform = this.lightDiffuseUniform;
+      const lightEnabledVal = particleConfig.lightEnabled;
+
       material.onBeforeCompile = (shader) => {
         shader.uniforms.depthNearMul = nearMulRef;
         shader.uniforms.depthFarMul = farMulRef;
         shader.uniforms.localZMin = zMinRef;
         shader.uniforms.localZMax = zMaxRef;
+        shader.uniforms.lightDir = lightDirUniform;
+        shader.uniforms.lightAmbient = lightAmbientUniform;
+        shader.uniforms.lightDiffuse = lightDiffuseUniform;
 
-        // Add uniforms at global scope
+        // Add uniforms + varying at global scope (vertex)
         shader.vertexShader = shader.vertexShader.replace(
           'void main() {',
-          'attribute float mouseMul;\nuniform float depthNearMul;\nuniform float depthFarMul;\nuniform float localZMin;\nuniform float localZMax;\nvoid main() {'
+          `attribute float mouseMul;
+uniform float depthNearMul;
+uniform float depthFarMul;
+uniform float localZMin;
+uniform float localZMax;
+uniform vec3 lightDir;
+uniform float lightAmbient;
+uniform float lightDiffuse;
+varying float vBrightness;
+void main() {`
         );
 
-        // Replace attenuation: standard atten × depth-interpolated multiplier
+        // Replace attenuation: standard atten × depth-interpolated multiplier + compute lighting
         shader.vertexShader = shader.vertexShader.replace(
           'if ( isPerspective ) gl_PointSize *= ( scale / - mvPosition.z );',
           `if ( isPerspective ) {
@@ -377,7 +463,24 @@ export class ModelShape {
             float depthT = clamp((mvPosition.z - nearZ) / (farZ - nearZ), 0.0, 1.0);
             gl_PointSize *= mix(depthNearMul, depthFarMul, depthT);
             gl_PointSize *= mouseMul;
+            ${lightEnabledVal ? `
+            vec3 worldNormal = normalize(mat3(modelMatrix) * position);
+            float diff = max(dot(worldNormal, lightDir), 0.0);
+            vBrightness = lightAmbient + lightDiffuse * diff;
+            ` : `
+            vBrightness = 1.0;
+            `}
           }`
+        );
+
+        // Fragment shader: add varying + apply brightness
+        shader.fragmentShader = shader.fragmentShader.replace(
+          'void main() {',
+          'varying float vBrightness;\nvoid main() {'
+        );
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <opaque_fragment>',
+          '#include <opaque_fragment>\ngl_FragColor.rgb *= vBrightness;'
         );
       };
 
@@ -428,18 +531,18 @@ export class ModelShape {
     }
 
     if (localProgress < enterRatio) {
-      // Enter phase: particles reform from scattered to shape
+      // Enter phase: particles reform from scattered to shape (no fade)
       const t = localProgress / enterRatio;
       const eased = this.easeOutQuad(t);
-      return { opacity: eased, scatterAmount: 1.0 - eased };
+      return { opacity: 1.0, scatterAmount: 1.0 - eased };
     } else if (localProgress < enterRatio + holdRatio) {
       // Hold phase: fully formed
       return { opacity: 1.0, scatterAmount: 0.0 };
     } else {
-      // Exit phase: particles scatter outward
+      // Exit phase: particles scatter outward (no fade)
       const t = (localProgress - enterRatio - holdRatio) / (1 - enterRatio - holdRatio);
       const eased = this.easeInQuad(t);
-      return { opacity: 1.0 - eased, scatterAmount: eased };
+      return { opacity: 1.0, scatterAmount: eased };
     }
   }
 
@@ -538,9 +641,10 @@ export class ModelShape {
     for (let i = 0; i < this.particleCount; i++) {
       const i3 = i * 3;
 
-      const x = this.originalPositions[i3] + this.scatterOffsets[i3] * scatterAmount;
-      const y = this.originalPositions[i3 + 1] + this.scatterOffsets[i3 + 1] * scatterAmount;
-      const z = this.originalPositions[i3 + 2] + this.scatterOffsets[i3 + 2] * scatterAmount;
+      const scatter = scatterAmount * particleConfig.scatterScale;
+      const x = this.originalPositions[i3] + this.scatterOffsets[i3] * scatter;
+      const y = this.originalPositions[i3 + 1] + this.scatterOffsets[i3 + 1] * scatter;
+      const z = this.originalPositions[i3 + 2] + this.scatterOffsets[i3 + 2] * scatter;
 
       // Magnetic attraction + optional size scaling
       let targetX = 0, targetY = 0, targetZ = 0;
