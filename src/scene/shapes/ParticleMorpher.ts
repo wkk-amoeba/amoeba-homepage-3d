@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { getCircleTexture } from '../../utils/circleTexture';
-import { ModelData, scrollConfig, animationPhases, particleConfig, getParticleMultiplier, PERFORMANCE_CONFIG } from '../../config/sceneConfig';
+import { ModelData, scrollConfig, animationPhases, particleConfig, introConfig, getParticleMultiplier, PERFORMANCE_CONFIG } from '../../config/sceneConfig';
 import { createShapePoints } from '../../utils/shapeGenerators';
 
 interface ShapeTarget {
@@ -60,6 +60,10 @@ export class ParticleMorpher {
   // Per-particle micro-orbit axes (precomputed at load)
   private orbitAxis1: Float32Array = new Float32Array(0);
   private orbitAxis2: Float32Array = new Float32Array(0);
+
+  // Intro animation
+  private introElapsed = 0;
+  private introComplete = false;
 
   // Debug
   private _userScale = 1.0;
@@ -262,13 +266,26 @@ export class ParticleMorpher {
       this.orbitAxis2[i3 + 2] = ux * py - uy * px;
     }
 
-    // Set initial positions to first shape
+    // Set initial positions: scattered if intro enabled, otherwise first shape
     const first = this.shapeTargets[0];
-    for (let i = 0; i < this.particleCount; i++) {
-      const i3 = i * 3;
-      this.currentPositions[i3] = first.positions[i3] + first.worldOffset.x;
-      this.currentPositions[i3 + 1] = first.positions[i3 + 1] + first.worldOffset.y;
-      this.currentPositions[i3 + 2] = first.positions[i3 + 2] + first.worldOffset.z;
+    if (introConfig.enabled) {
+      this.introComplete = false;
+      this.introElapsed = 0;
+      // Use scatterOffsets directly (magnitude 5-15) to fill the entire screen
+      for (let i = 0; i < this.particleCount; i++) {
+        const i3 = i * 3;
+        this.currentPositions[i3] = this.scatterOffsets[i3];
+        this.currentPositions[i3 + 1] = this.scatterOffsets[i3 + 1];
+        this.currentPositions[i3 + 2] = this.scatterOffsets[i3 + 2];
+      }
+    } else {
+      this.introComplete = true;
+      for (let i = 0; i < this.particleCount; i++) {
+        const i3 = i * 3;
+        this.currentPositions[i3] = first.positions[i3] + first.worldOffset.x;
+        this.currentPositions[i3 + 1] = first.positions[i3 + 1] + first.worldOffset.y;
+        this.currentPositions[i3 + 2] = first.positions[i3 + 2] + first.worldOffset.z;
+      }
     }
 
     // Update depth uniforms from first shape
@@ -431,6 +448,10 @@ void main() {`
 
   // --- Main update ---
 
+  private easeOutCubic(t: number): number {
+    return 1 - Math.pow(1 - t, 3);
+  }
+
   update(delta: number, scrollProgress: number, mouseWorldPos: THREE.Vector3 | null, mouseNorm?: THREE.Vector2, mouseSpeed?: number) {
     if (!this.points || this.shapeTargets.length === 0) return;
 
@@ -451,6 +472,98 @@ void main() {`
       this.parallaxRotY *= 0.95;
     }
     this.points.rotation.set(this.parallaxRotX, this.parallaxRotY, 0);
+
+    // --- Intro animation: particles gather to form first shape ---
+    if (introConfig.enabled && !this.introComplete) {
+      this.introElapsed += delta;
+      const first = this.shapeTargets[0];
+
+      // Update shader uniforms for first shape
+      this.localZMinUniform.value = first.zMin;
+      this.localZMaxUniform.value = first.zMax;
+      this.shapeCenterUniform.value.copy(first.worldOffset);
+
+      if (this.introElapsed < introConfig.delay) {
+        // Still in delay phase — keep fully scattered, apply micro-orbit only
+        const posAttr = this.points.geometry.getAttribute('position') as THREE.BufferAttribute;
+        const noiseAmp = particleConfig.microNoiseAmp;
+        if (noiseAmp > 0) {
+          this.orbitTime += delta;
+          for (let i = 0; i < this.particleCount; i++) {
+            const i3 = i * 3;
+            const angle = this.orbitTime * particleConfig.microNoiseSpeed + this.scatterOffsets[i3];
+            const cosA = Math.cos(angle), sinA = Math.sin(angle);
+            this.currentPositions[i3] = this.scatterOffsets[i3] + (this.orbitAxis1[i3] * cosA + this.orbitAxis2[i3] * sinA) * noiseAmp;
+            this.currentPositions[i3 + 1] = this.scatterOffsets[i3 + 1] + (this.orbitAxis1[i3 + 1] * cosA + this.orbitAxis2[i3 + 1] * sinA) * noiseAmp;
+            this.currentPositions[i3 + 2] = this.scatterOffsets[i3 + 2] + (this.orbitAxis1[i3 + 2] * cosA + this.orbitAxis2[i3 + 2] * sinA) * noiseAmp;
+          }
+        }
+        posAttr.needsUpdate = true;
+        return;
+      }
+
+      // Gathering phase: lerp from scattered positions to first shape
+      const gatherElapsed = this.introElapsed - introConfig.delay;
+      const t = Math.min(1, gatherElapsed / introConfig.duration);
+      const eased = this.easeOutCubic(t);
+
+      // scatter = 1 - eased: starts at 1 (fully scattered), ends at 0 (formed)
+      const scatter = 1 - eased;
+
+      this.orbitTime += delta;
+      const noiseAmp = particleConfig.microNoiseAmp;
+
+      // Self-rotation: continuous Y-axis spin that decelerates as shape forms
+      const totalAngle = introConfig.rotationTurns * Math.PI * 2;
+      const rotAngle = totalAngle * (1 - eased);
+      const cosRot = Math.cos(rotAngle);
+      const sinRot = Math.sin(rotAngle);
+      const cx = first.worldOffset.x;
+      const cz = first.worldOffset.z;
+
+      for (let i = 0; i < this.particleCount; i++) {
+        const i3 = i * 3;
+        // Lerp: scattered position → target shape position
+        const targetX = first.positions[i3] + first.worldOffset.x;
+        const targetY = first.positions[i3 + 1] + first.worldOffset.y;
+        const targetZ = first.positions[i3 + 2] + first.worldOffset.z;
+        let bx = this.scatterOffsets[i3] * scatter + targetX * eased;
+        let by = this.scatterOffsets[i3 + 1] * scatter + targetY * eased;
+        let bz = this.scatterOffsets[i3 + 2] * scatter + targetZ * eased;
+
+        // Apply self-rotation around Y axis (like object spinning)
+        if (rotAngle !== 0) {
+          const rx = bx - cx;
+          const rz = bz - cz;
+          bx = cx + rx * cosRot - rz * sinRot;
+          bz = cz + rx * sinRot + rz * cosRot;
+        }
+
+        // Micro-orbit
+        let orbitX = 0, orbitY = 0, orbitZ = 0;
+        if (noiseAmp > 0) {
+          const angle = this.orbitTime * particleConfig.microNoiseSpeed + this.scatterOffsets[i3];
+          const cosA = Math.cos(angle), sinA = Math.sin(angle);
+          orbitX = (this.orbitAxis1[i3] * cosA + this.orbitAxis2[i3] * sinA) * noiseAmp;
+          orbitY = (this.orbitAxis1[i3 + 1] * cosA + this.orbitAxis2[i3 + 1] * sinA) * noiseAmp;
+          orbitZ = (this.orbitAxis1[i3 + 2] * cosA + this.orbitAxis2[i3 + 2] * sinA) * noiseAmp;
+        }
+
+        this.currentPositions[i3] = bx + orbitX;
+        this.currentPositions[i3 + 1] = by + orbitY;
+        this.currentPositions[i3 + 2] = bz + orbitZ;
+      }
+
+      const posAttr = this.points.geometry.getAttribute('position') as THREE.BufferAttribute;
+      posAttr.needsUpdate = true;
+
+      if (t >= 1) {
+        this.introComplete = true;
+        window.dispatchEvent(new Event('intro-complete'));
+        console.log('ParticleMorpher: intro animation complete');
+      }
+      return;
+    }
 
     // Get current morph phase
     const phase = this.getPhase(scrollProgress);

@@ -102,6 +102,15 @@ export const animationPhases = {
   exitRatio: 0.2,    // 퇴장: 20%
 };
 
+// 인트로 애니메이션 설정 (페이지 로드 시 파티클이 모여서 첫 오브젝트 형성)
+export const introConfig = {
+  enabled: true,          // 인트로 애니메이션 on/off
+  duration: 2.0,          // 인트로 지속 시간 (초)
+  delay: 0.3,             // 페이지 로드 후 대기 시간 (초)
+  scatterDistance: [5, 15] as [number, number], // 흩어진 파티클 거리 범위
+  rotationTurns: 9,     // 인트로 중 자전 회전수 (1.0 = 360°)
+};
+
 // 배경 파티클 설정 (원통형 분포 → Y축 회전 시 균일)
 export const backgroundConfig = {
   enabled: true,          // 기본 활성

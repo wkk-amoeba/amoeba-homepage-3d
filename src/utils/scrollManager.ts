@@ -1,4 +1,4 @@
-import { scrollConfig } from '../config/sceneConfig';
+import { scrollConfig, introConfig } from '../config/sceneConfig';
 
 export type ScrollListener = (progress: number) => void;
 
@@ -8,9 +8,14 @@ class ScrollManager {
   private smoothing = 0.05;    // lerp 속도 (0=정지, 1=즉시)
   private listeners: ScrollListener[] = [];
   private contentElement: HTMLElement | null = null;
+  private introComplete = !introConfig.enabled; // 인트로 비활성이면 즉시 완료
+  private introTextOpacity = 0; // 인트로 후 첫 섹션 텍스트 페이드인 진행
 
   constructor() {
     this.handleScroll = this.handleScroll.bind(this);
+    window.addEventListener('intro-complete', () => {
+      this.introComplete = true;
+    });
   }
 
   init(contentSelector = '#content') {
@@ -56,6 +61,11 @@ class ScrollManager {
     const fadeInRatio = 0.15;
     const fadeOutRatio = 0.15;
 
+    // Smoothly fade in the intro text opacity after intro completes
+    if (this.introComplete && this.introTextOpacity < 1) {
+      this.introTextOpacity = Math.min(1, this.introTextOpacity + 0.02);
+    }
+
     sections.forEach((section, index) => {
       const content = section.querySelector('.shape-content') as HTMLElement;
       if (!content) return;
@@ -71,13 +81,18 @@ class ScrollManager {
       const local = (this.progress - start) / scrollConfig.sectionDuration;
       let opacity = 1;
 
-      // Fade in (skip for first section — show immediately)
+      // Fade in (skip for first section — controlled by intro)
       if (index > 0 && local < fadeInRatio) {
         opacity = local / fadeInRatio;
       }
       // Fade out (skip for last section — stay visible)
       else if (index < sections.length - 1 && local > 1 - fadeOutRatio) {
         opacity = 1 - (local - (1 - fadeOutRatio)) / fadeOutRatio;
+      }
+
+      // First section: gate by intro completion fade-in
+      if (index === 0) {
+        opacity *= this.introTextOpacity;
       }
 
       content.style.opacity = String(opacity);
