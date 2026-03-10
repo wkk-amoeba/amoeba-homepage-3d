@@ -521,9 +521,9 @@ void main() {`
       this.orbitTime += delta;
       const noiseAmp = particleConfig.microNoiseAmp;
 
-      // Self-rotation: continuous Y-axis spin that decelerates as shape forms
+      // Self-rotation: intro spin + autoRotate combined for seamless handoff
       const totalAngle = introConfig.rotationTurns * Math.PI * 2;
-      const rotAngle = totalAngle * (1 - eased);
+      const rotAngle = totalAngle * (1 - eased) + this.autoRotateAngle;
       const cosRot = Math.cos(rotAngle);
       const sinRot = Math.sin(rotAngle);
       const cx = first.worldOffset.x;
