@@ -47,6 +47,9 @@ export class ParticleMorpher {
   private mouseActivity = 0;
   private wasMouseNear = false;
 
+  // Auto-rotation accumulator
+  private autoRotateAngle = 0;
+
   // Shader uniforms
   private depthNearMulUniform = { value: particleConfig.depthNearMul };
   private depthFarMulUniform = { value: particleConfig.depthFarMul };
@@ -462,6 +465,11 @@ void main() {`
     // Update scale
     this.points.scale.setScalar(this._userScale);
 
+    // Auto-rotation (slow continuous Y-axis spin)
+    if (particleConfig.autoRotateSpeed !== 0) {
+      this.autoRotateAngle += particleConfig.autoRotateSpeed * delta;
+    }
+
     // Parallax rotation
     const pStr = particleConfig.parallaxStrength;
     if (mouseNorm) {
@@ -682,6 +690,16 @@ void main() {`
           baseX = cx + rx * cosA - rz * sinA;
           baseZ = rx * sinA + rz * cosA;
         }
+      }
+
+      // Auto-rotation around effective center (Y axis)
+      if (this.autoRotateAngle !== 0) {
+        const arx = baseX - effectiveCenter.x;
+        const arz = baseZ - effectiveCenter.z;
+        const arCos = Math.cos(this.autoRotateAngle);
+        const arSin = Math.sin(this.autoRotateAngle);
+        baseX = effectiveCenter.x + arx * arCos - arz * arSin;
+        baseZ = effectiveCenter.z + arx * arSin + arz * arCos;
       }
 
       // --- Mouse interaction (same logic as ModelShape) ---

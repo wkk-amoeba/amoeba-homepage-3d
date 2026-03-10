@@ -81,6 +81,8 @@ export const particleConfig = {
   // 전환 시 회전 효과 (파티클이 오브젝트 중심 주위로 회전하며 형태 형성)
   transitionRotation: true,      // 전환 회전 on/off
   transitionRotationSpeed: 3.0,  // 회전 속도 (rad/s)
+  // 오브젝트 자전 (Y축 느린 회전)
+  autoRotateSpeed: 0.15,         // 자전 속도 (rad/s), 0=비활성
   // 디버그 시각화
   showDomeDebug: false,          // 돔 영역 빨간 원 표시
 };
@@ -108,7 +110,7 @@ export const introConfig = {
   duration: 2.0,          // 인트로 지속 시간 (초)
   delay: 0.3,             // 페이지 로드 후 대기 시간 (초)
   scatterDistance: [5, 15] as [number, number], // 흩어진 파티클 거리 범위
-  rotationTurns: 9,     // 인트로 중 자전 회전수 (1.0 = 360°)
+  rotationTurns: -9,    // 인트로 중 자전 회전수 (양수=반시계, 음수=시계)
 };
 
 // 배경 파티클 설정 (원통형 분포 → Y축 회전 시 균일)
