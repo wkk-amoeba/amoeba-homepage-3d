@@ -14,10 +14,10 @@ export class ParticleBackground {
   private exclusionRadiusUniform = { value: backgroundConfig.exclusionRadius };
   private exclusionFadeUniform = { value: backgroundConfig.exclusionFade };
 
-  // Fade-in animation
+  // Fade-in animation (triggered by intro-gather-threshold event)
+  private fadeStarted = false;
   private fadeElapsed = 0;
-  private fadeDelay = 0.5;   // 500ms offset
-  private fadeDuration = 1.0; // 1s fade
+  private fadeDuration = 1.0; // 3s fade
   private fadeComplete = false;
 
   constructor(scene: THREE.Scene) {
@@ -116,6 +116,11 @@ void main() {`
     this.points.renderOrder = 1;
     this.points.visible = backgroundConfig.enabled;
     scene.add(this.points);
+
+    // Listen for intro gather reaching 80% to start fade-in
+    window.addEventListener('intro-gather-threshold', () => {
+      this.fadeStarted = true;
+    }, { once: true });
   }
 
   get visible(): boolean { return this.points.visible; }
@@ -159,13 +164,13 @@ void main() {`
   update(delta: number) {
     this.points.rotation.y += backgroundConfig.rotationSpeed * delta;
 
-    // Fade-in with 500ms delay
+    // Fade-in triggered by intro gather reaching 80%
     if (!this.fadeComplete) {
-      this.fadeElapsed += delta;
-      if (this.fadeElapsed < this.fadeDelay) {
+      if (!this.fadeStarted) {
         return;
       }
-      const fadeT = Math.min(1, (this.fadeElapsed - this.fadeDelay) / this.fadeDuration);
+      this.fadeElapsed += delta;
+      const fadeT = Math.min(1, this.fadeElapsed / this.fadeDuration);
       const eased = fadeT * fadeT * (3 - 2 * fadeT); // smoothstep
       const mat = this.points.material as THREE.PointsMaterial;
       mat.opacity = backgroundConfig.opacity * eased;

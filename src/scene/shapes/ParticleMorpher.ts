@@ -68,6 +68,7 @@ export class ParticleMorpher {
   private introElapsed = 0;
   private introComplete = false;
   private introOpacity = 0;
+  private introGatherTriggered = false;
 
   // Debug
   private _userScale = 1.0;
@@ -594,6 +595,10 @@ void main() {`
       const posAttr = this.points.geometry.getAttribute('position') as THREE.BufferAttribute;
       posAttr.needsUpdate = true;
 
+      if (!this.introGatherTriggered && t >= 0.25) {
+        this.introGatherTriggered = true;
+        window.dispatchEvent(new Event('intro-gather-threshold'));
+      }
       if (t >= 1) {
         this.introComplete = true;
         (this.points.material as THREE.PointsMaterial).opacity = 1;
