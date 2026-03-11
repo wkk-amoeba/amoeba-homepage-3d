@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chronography Test</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #000;
+      color: #fff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      overflow: hidden;
+      height: 100vh;
+    }
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+    }
+    canvas { display: block; }
+
+    /* UI Overlay */
+    .overlay {
+      position: fixed;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    /* Center text */
+    .center-text {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      z-index: 10;
+      pointer-events: none;
+      transition: opacity 0.5s;
+    }
+    .center-text .title {
+      font-size: 1.2rem;
+      font-weight: 300;
+      letter-spacing: 0.3em;
+      opacity: 0.7;
+      margin-bottom: 0.3rem;
+    }
+    .center-text .year {
+      font-size: 3rem;
+      font-weight: 200;
+      letter-spacing: 0.1em;
+      transition: opacity 0.3s;
+    }
+    .center-text .year-range {
+      font-size: 0.9rem;
+      font-weight: 300;
+      opacity: 0.4;
+      margin-top: 0.5rem;
+    }
+
+    /* Year buttons */
+    .year-nav {
+      position: fixed;
+      bottom: 2rem;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 0.4rem;
+      z-index: 10;
+      pointer-events: all;
+      flex-wrap: wrap;
+      justify-content: center;
+      max-width: 90vw;
+    }
+    .year-btn {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.5);
+      padding: 0.3rem 0.6rem;
+      font-size: 0.7rem;
+      cursor: pointer;
+      border-radius: 2rem;
+      transition: all 0.3s;
+      font-family: inherit;
+    }
+    .year-btn:hover {
+      border-color: rgba(255,255,255,0.4);
+      color: rgba(255,255,255,0.8);
+    }
+    .year-btn.active {
+      border-color: var(--year-color);
+      color: #fff;
+      background: var(--year-color);
+    }
+    .year-btn .dot {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--year-color);
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+    .year-btn.active .dot {
+      background: #fff;
+    }
+
+    /* Info panel */
+    .info-panel {
+      position: fixed;
+      top: 1.5rem;
+      right: 1.5rem;
+      z-index: 10;
+      text-align: right;
+      opacity: 0.5;
+      font-size: 0.75rem;
+      line-height: 1.6;
+    }
+
+    /* Arrow nav */
+    .arrow-nav {
+      position: fixed;
+      top: 50%;
+      transform: translateY(-50%);
+      z-index: 10;
+      pointer-events: all;
+    }
+    .arrow-nav.left { left: 1.5rem; }
+    .arrow-nav.right { right: 1.5rem; }
+    .arrow-btn {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: rgba(255,255,255,0.6);
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 1.2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.3s;
+      font-family: inherit;
+    }
+    .arrow-btn:hover {
+      background: rgba(255,255,255,0.1);
+      color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div class="center-text">
+    <div class="title">Chronography</div>
+    <div class="year" id="year-display">1998</div>
+    <div class="year-range">1998 - 2024</div>
+  </div>
+
+  <div class="arrow-nav left">
+    <button class="arrow-btn" id="prev-btn">&larr;</button>
+  </div>
+  <div class="arrow-nav right">
+    <button class="arrow-btn" id="next-btn">&rarr;</button>
+  </div>
+
+  <div class="info-panel" id="info-panel"></div>
+
+  <div class="year-nav" id="year-nav"></div>
+
+  <script type="module" src="/src/chronography/main.ts"></script>
+</body>
+</html>

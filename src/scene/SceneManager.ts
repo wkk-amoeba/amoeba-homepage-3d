@@ -160,10 +160,11 @@ export class SceneManager {
     }
 
     // Update all objects
-    this.background.update(delta);
     if (this.particleMorpher) {
       this.particleMorpher.update(delta, scrollProgress, this.mouseWorldPos, this.mouse, this.mouseSpeed);
+      this.background.setObjectCenter(this.particleMorpher.getEffectiveCenter());
     }
+    this.background.update(delta);
 
     // Update dome debug disc
     if (particleConfig.showDomeDebug && this.mouseWorldPos) {

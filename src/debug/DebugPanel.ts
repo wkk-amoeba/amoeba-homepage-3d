@@ -243,6 +243,16 @@ export class DebugPanel {
         .add(bgParams, 'opacity', 0, 1, 0.05)
         .name('Opacity')
         .onChange((v: number) => { backgroundConfig.opacity = v; bg.rebuild(); });
+
+      bgFolder
+        .add(backgroundConfig, 'exclusionRadius', 0, 3, 0.05)
+        .name('Exclusion R')
+        .onChange((v: number) => { bg.setExclusionRadius(v); });
+
+      bgFolder
+        .add(backgroundConfig, 'exclusionFade', 0, 1, 0.05)
+        .name('Exclusion Fade')
+        .onChange((v: number) => { bg.setExclusionFade(v); });
     }
 
     // Per-shape position folders

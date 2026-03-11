@@ -9,6 +9,17 @@ export class ParticleBackground {
   private lightAmbientUniform = { value: particleConfig.lightAmbient };
   private lightDiffuseUniform = { value: particleConfig.lightDiffuse };
 
+  // Exclusion zone uniforms
+  private objectCenterUniform = { value: new THREE.Vector3(0, 0, 2) };
+  private exclusionRadiusUniform = { value: backgroundConfig.exclusionRadius };
+  private exclusionFadeUniform = { value: backgroundConfig.exclusionFade };
+
+  // Fade-in animation
+  private fadeElapsed = 0;
+  private fadeDelay = 0.5;   // 500ms offset
+  private fadeDuration = 1.0; // 1s fade
+  private fadeComplete = false;
+
   constructor(scene: THREE.Scene) {
     const count = getAdjustedParticleCount(backgroundConfig.count);
     const positions = createBackgroundParticles(
@@ -32,7 +43,8 @@ export class ParticleBackground {
       size: backgroundConfig.size * 2,
       sizeAttenuation: true,
       depthWrite: false,
-      opacity: backgroundConfig.opacity,
+      depthTest: false,
+      opacity: 0,
       map: getCircleTexture(),
       alphaMap: getCircleTexture(),
     });
@@ -41,18 +53,28 @@ export class ParticleBackground {
     const lightDirRef = this.lightDirUniform;
     const lightAmbientRef = this.lightAmbientUniform;
     const lightDiffuseRef = this.lightDiffuseUniform;
+    const objectCenterRef = this.objectCenterUniform;
+    const exclusionRadiusRef = this.exclusionRadiusUniform;
+    const exclusionFadeRef = this.exclusionFadeUniform;
 
     material.onBeforeCompile = (shader) => {
       shader.uniforms.lightDir = lightDirRef;
       shader.uniforms.lightAmbient = lightAmbientRef;
       shader.uniforms.lightDiffuse = lightDiffuseRef;
+      shader.uniforms.objectCenter = objectCenterRef;
+      shader.uniforms.exclusionRadius = exclusionRadiusRef;
+      shader.uniforms.exclusionFade = exclusionFadeRef;
 
       shader.vertexShader = shader.vertexShader.replace(
         'void main() {',
         `uniform vec3 lightDir;
 uniform float lightAmbient;
 uniform float lightDiffuse;
+uniform vec3 objectCenter;
+uniform float exclusionRadius;
+uniform float exclusionFade;
 varying float vBrightness;
+varying float vExclusionFade;
 void main() {`
       );
 
@@ -63,21 +85,35 @@ void main() {`
             vec3 worldNormal = normalize(mat3(modelMatrix) * position);
             float diff = max(dot(worldNormal, lightDir), 0.0);
             vBrightness = lightAmbient + lightDiffuse * diff;
+            // Screen-space exclusion zone
+            vec4 objClip = projectionMatrix * viewMatrix * vec4(objectCenter, 1.0);
+            vec2 objNDC = objClip.xy / objClip.w;
+            vec4 myClip = projectionMatrix * mvPosition;
+            vec2 myNDC = myClip.xy / myClip.w;
+            float screenDist = length(myNDC - objNDC);
+            vExclusionFade = smoothstep(exclusionRadius, exclusionRadius + exclusionFade, screenDist);
+            gl_PointSize *= vExclusionFade;
           }`
       );
 
       shader.fragmentShader = shader.fragmentShader.replace(
         'void main() {',
-        'varying float vBrightness;\nvoid main() {'
+        'varying float vBrightness;\nvarying float vExclusionFade;\nvoid main() {'
       );
       shader.fragmentShader = shader.fragmentShader.replace(
         '#include <opaque_fragment>',
-        '#include <opaque_fragment>\ngl_FragColor.rgb *= vBrightness;'
+        '#include <opaque_fragment>\ngl_FragColor.rgb *= vBrightness;\ngl_FragColor.a *= vExclusionFade;'
       );
     };
 
+    // Stencil: only draw where object particles have NOT been drawn (stencil ≠ 1)
+    material.stencilWrite = false;
+    material.stencilFunc = THREE.NotEqualStencilFunc;
+    material.stencilRef = 1;
+
     this.points = new THREE.Points(geometry, material);
     this.points.frustumCulled = false;
+    this.points.renderOrder = 1;
     this.points.visible = backgroundConfig.enabled;
     scene.add(this.points);
   }
@@ -110,11 +146,33 @@ void main() {`
     this.lightDirUniform.value.set(x / len, y / len, z / len);
   }
 
+  setObjectCenter(pos: THREE.Vector3) {
+    this.objectCenterUniform.value.copy(pos);
+  }
+
+  setExclusionRadius(v: number) { this.exclusionRadiusUniform.value = v; }
+  setExclusionFade(v: number) { this.exclusionFadeUniform.value = v; }
+
   setLightAmbient(v: number) { this.lightAmbientUniform.value = v; }
   setLightDiffuse(v: number) { this.lightDiffuseUniform.value = v; }
 
   update(delta: number) {
     this.points.rotation.y += backgroundConfig.rotationSpeed * delta;
+
+    // Fade-in with 500ms delay
+    if (!this.fadeComplete) {
+      this.fadeElapsed += delta;
+      if (this.fadeElapsed < this.fadeDelay) {
+        return;
+      }
+      const fadeT = Math.min(1, (this.fadeElapsed - this.fadeDelay) / this.fadeDuration);
+      const eased = fadeT * fadeT * (3 - 2 * fadeT); // smoothstep
+      const mat = this.points.material as THREE.PointsMaterial;
+      mat.opacity = backgroundConfig.opacity * eased;
+      if (fadeT >= 1) {
+        this.fadeComplete = true;
+      }
+    }
   }
 
   dispose() {

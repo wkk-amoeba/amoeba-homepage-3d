@@ -67,6 +67,7 @@ export class ParticleMorpher {
   // Intro animation
   private introElapsed = 0;
   private introComplete = false;
+  private introOpacity = 0;
 
   // Debug
   private _userScale = 1.0;
@@ -128,6 +129,13 @@ export class ParticleMorpher {
 
   setLightDiffuse(v: number) {
     this.lightDiffuseUniform.value = v;
+  }
+
+  /** Current effective center in world space (Points.position + shape offset) */
+  private _effectiveCenter = new THREE.Vector3(0, 0, 2);
+
+  getEffectiveCenter(): THREE.Vector3 {
+    return this._effectiveCenter;
   }
 
   // --- Shape loading ---
@@ -274,6 +282,7 @@ export class ParticleMorpher {
     if (introConfig.enabled) {
       this.introComplete = false;
       this.introElapsed = 0;
+      this.introOpacity = 0;
       // Use scatterOffsets directly (magnitude 5-15) to fill the entire screen
       for (let i = 0; i < this.particleCount; i++) {
         const i3 = i * 3;
@@ -377,6 +386,12 @@ void main() {`
         '#include <opaque_fragment>\ngl_FragColor.rgb *= vBrightness;'
       );
     };
+
+    // Stencil: write 1 where object particles are drawn
+    material.stencilWrite = true;
+    material.stencilFunc = THREE.AlwaysStencilFunc;
+    material.stencilRef = 1;
+    material.stencilZPass = THREE.ReplaceStencilOp;
 
     this.points = new THREE.Points(geometry, material);
     this.points.frustumCulled = false;
@@ -490,10 +505,18 @@ void main() {`
       this.localZMinUniform.value = first.zMin;
       this.localZMaxUniform.value = first.zMax;
       this.shapeCenterUniform.value.copy(first.worldOffset);
+      this._effectiveCenter.set(
+        this.points.position.x + first.worldOffset.x,
+        this.points.position.y + first.worldOffset.y,
+        this.points.position.z + first.worldOffset.z
+      );
 
       if (this.introElapsed < introConfig.delay) {
         // Still in delay phase — keep fully scattered, apply micro-orbit only
         const posAttr = this.points.geometry.getAttribute('position') as THREE.BufferAttribute;
+        const mat = this.points.material as THREE.PointsMaterial;
+        mat.opacity = 0;
+        this.introOpacity = 0;
         const noiseAmp = particleConfig.microNoiseAmp;
         if (noiseAmp > 0) {
           this.orbitTime += delta;
@@ -514,6 +537,12 @@ void main() {`
       const gatherElapsed = this.introElapsed - introConfig.delay;
       const t = Math.min(1, gatherElapsed / introConfig.duration);
       const eased = this.easeOutCubic(t);
+
+      // Fade in: opacity rises quickly in the first half of gathering
+      const fadeT = Math.min(1, t * 2);
+      this.introOpacity = this.easeOutCubic(fadeT);
+      const mat = this.points.material as THREE.PointsMaterial;
+      mat.opacity = this.introOpacity;
 
       // scatter = 1 - eased: starts at 1 (fully scattered), ends at 0 (formed)
       const scatter = 1 - eased;
@@ -567,6 +596,7 @@ void main() {`
 
       if (t >= 1) {
         this.introComplete = true;
+        (this.points.material as THREE.PointsMaterial).opacity = 1;
         window.dispatchEvent(new Event('intro-complete'));
         console.log('ParticleMorpher: intro animation complete');
       }
@@ -591,6 +621,11 @@ void main() {`
       this.localZMaxUniform.value = THREE.MathUtils.lerp(from.zMax, to.zMax, phase.t);
     }
     this.shapeCenterUniform.value.copy(effectiveCenter);
+    this._effectiveCenter.set(
+      this.points.position.x + effectiveCenter.x,
+      this.points.position.y + effectiveCenter.y,
+      this.points.position.z + effectiveCenter.z
+    );
 
     // --- Mouse interaction setup ---
     let localMousePos: THREE.Vector3 | null = null;

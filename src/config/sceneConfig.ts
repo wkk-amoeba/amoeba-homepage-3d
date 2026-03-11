@@ -116,11 +116,13 @@ export const introConfig = {
 // 배경 파티클 설정 (원통형 분포 → Y축 회전 시 균일)
 export const backgroundConfig = {
   enabled: true,          // 기본 활성
-  count: 240,
-  radius: 10,            // 원통 반경
-  height: 13,            // 원통 높이 (Y축)
+  count: 700,
+  radius: 5,             // 원통 반경
+  height: 5,             // 원통 높이 (Y축)
   minRadius: 1,          // 카메라 근처 빈 영역
-  size: 0.05,
-  opacity: 0.6,
+  size: 0.03,
+  opacity: 1,
   rotationSpeed: 0.02,
+  exclusionRadius: 0,   // 오브젝트 실루엣 제외 반경 (NDC 단위)
+  exclusionFade: 0.7,     // 제외 경계 페이드 영역 크기
 };

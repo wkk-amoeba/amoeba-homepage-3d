@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite';
+import { resolve } from 'path';
 
 export default defineConfig(({ mode }) => ({
   define: {
@@ -8,6 +9,10 @@ export default defineConfig(({ mode }) => ({
     target: 'esnext',
     minify: 'esbuild',
     rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        chronography: resolve(__dirname, 'chronography.html'),
+      },
       output: {
         manualChunks: {
           three: ['three'],
