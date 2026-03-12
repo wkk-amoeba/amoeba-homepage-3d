@@ -28,6 +28,7 @@ export interface ModelData {
   name: string;
   modelPath?: string;            // GLB 경로 (geometry 미지정 시 필수)
   geometry?: string;             // 프로그래밍 도형 ('sphere' | 'box' | 'tetrahedron' 등)
+  precomputedPositions?: Float32Array; // 사전 계산된 버텍스 위치 (런타임 주입용)
   scale: number;
   position?: [number, number, number]; // 월드 위치 오프셋 [x, y, z] (Points 중심 기준)
   rotation?: [number, number, number]; // 기본 회전 [x, y, z] (라디안)
@@ -40,6 +41,7 @@ export const models: ModelData[] = [
   { id: 0, name: 'Sphere', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [0, 0, 0] },
   { id: 1, name: 'Box', modelPath: '/models/high_cube.glb', scale: 0.27, position: [0.8, -0.7, 0] },
   { id: 2, name: 'Cone', modelPath: '/models/high_cone.glb', scale: 0.315, position: [0, 0, 0] },
+  { id: 3, name: 'Human', scale: 0.35, position: [0, -1.4, 0] },  // precomputedPositions는 런타임에 주입
 ];
 
 // 파티클 렌더링 모드
@@ -91,10 +93,10 @@ export const particleConfig = {
 export const scrollConfig = {
   introEnd: 0,             // 인트로 없음
   sectionStart: 0,         // 첫 모델 즉시 시작
-  sectionGap: 0.35,        // 35% 간격 (3개 모델 균등 배분)
-  sectionDuration: 0.35,   // 35% 지속 (sectionGap과 동일 → 갭 없음)
+  sectionGap: 0.25,        // 25% 간격 (4개 모델 균등 배분)
+  sectionDuration: 0.25,   // 25% 지속 (sectionGap과 동일 → 갭 없음)
   previewOffset: 0,        // 프리뷰 없음
-  modelCount: 3,
+  modelCount: 4,
 };
 
 // 애니메이션 페이즈 설정 (진입 → 고정 → 퇴장)

@@ -24,6 +24,7 @@ const MODELS = [
   { name: 'high_shpere', file: 'high_shpere.glb' },
   { name: 'high_cube', file: 'high_cube.glb' },
   { name: 'high_cone', file: 'high_cone.glb' },
+  { name: 'city_test', file: 'city_test.glb' },
 ];
 
 const MAX_VERTICES = 15_000;

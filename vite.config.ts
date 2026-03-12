@@ -13,6 +13,7 @@ export default defineConfig(({ mode }) => ({
         main: resolve(__dirname, 'index.html'),
         chronography: resolve(__dirname, 'chronography.html'),
         human: resolve(__dirname, 'human.html'),
+        experiment: resolve(__dirname, 'experiment.html'),
       },
       output: {
         manualChunks: {

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Experiment - 4 Shapes with Human</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-black text-white font-sans">
+  <!-- 3D Canvas Container -->
+  <div id="canvas-container" class="fixed inset-0 -z-10"></div>
+
+  <!-- Fixed text overlays -->
+  <div class="shape-section fixed inset-0 z-10 flex items-center justify-center pointer-events-none" data-index="0">
+    <div class="shape-content text-center opacity-0">
+      <div class="mb-4 inline-block rounded-full px-4 py-2 text-sm font-medium bg-white/10 text-white/80">01</div>
+      <h2 class="mb-4 text-5xl font-bold md:text-7xl">Sphere</h2>
+    </div>
+  </div>
+
+  <div class="shape-section fixed inset-0 z-10 flex items-center justify-center pointer-events-none" data-index="1">
+    <div class="shape-content text-center opacity-0">
+      <div class="mb-4 inline-block rounded-full px-4 py-2 text-sm font-medium bg-white/10 text-white/80">02</div>
+      <h2 class="mb-4 text-5xl font-bold md:text-7xl">Box</h2>
+    </div>
+  </div>
+
+  <div class="shape-section fixed inset-0 z-10 flex items-center justify-center pointer-events-none" data-index="2">
+    <div class="shape-content text-center opacity-0">
+      <div class="mb-4 inline-block rounded-full px-4 py-2 text-sm font-medium bg-white/10 text-white/80">03</div>
+      <h2 class="mb-4 text-5xl font-bold md:text-7xl">Cone</h2>
+    </div>
+  </div>
+
+  <div class="shape-section fixed inset-0 z-10 flex items-center justify-center pointer-events-none" data-index="3">
+    <div class="shape-content text-center opacity-0">
+      <div class="mb-4 inline-block rounded-full px-4 py-2 text-sm font-medium bg-white/10 text-white/80">04</div>
+      <h2 class="mb-4 text-5xl font-bold md:text-7xl">Human</h2>
+    </div>
+  </div>
+
+  <!-- Scroll spacer -->
+  <div id="content" style="height: 500vh;"></div>
+
+  <!-- Scroll Progress Indicator -->
+  <div id="scroll-indicator" class="fixed bottom-8 right-8 z-50 flex flex-col items-center gap-2">
+    <div class="h-32 w-1 overflow-hidden rounded-full bg-white/20">
+      <div id="scroll-bar" class="w-full rounded-full bg-white transition-all duration-150" style="height: 0%"></div>
+    </div>
+    <span id="scroll-percent" class="text-xs text-white/60">0%</span>
+  </div>
+
+  <script type="module" src="/src/experiment.ts"></script>
+</body>
+</html>

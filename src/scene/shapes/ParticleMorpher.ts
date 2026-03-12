@@ -70,6 +70,12 @@ export class ParticleMorpher {
   private introOpacity = 0;
   private introGatherTriggered = false;
 
+  // Per-shape animation updaters (called each frame before position computation)
+  private shapeUpdaters: Map<number, (delta: number) => void> = new Map();
+
+  // Ready promise (resolves when all shapes are loaded)
+  readonly ready: Promise<void>;
+
   // Debug
   private _userScale = 1.0;
 
@@ -81,7 +87,7 @@ export class ParticleMorpher {
     const ldLen = Math.sqrt(ld[0] * ld[0] + ld[1] * ld[1] + ld[2] * ld[2]);
     this.lightDirUniform = { value: new THREE.Vector3(ld[0] / ldLen, ld[1] / ldLen, ld[2] / ldLen) };
 
-    this.loadShapes(modelConfigs);
+    this.ready = this.loadShapes(modelConfigs);
   }
 
   // --- Public API for DebugPanel ---
@@ -132,6 +138,11 @@ export class ParticleMorpher {
     this.lightDiffuseUniform.value = v;
   }
 
+  /** Register a per-frame updater for a shape (e.g., animated FBX walking) */
+  setShapeUpdater(shapeIdx: number, updater: (delta: number) => void) {
+    this.shapeUpdaters.set(shapeIdx, updater);
+  }
+
   /** Current effective center in world space (Points.position + shape offset) */
   private _effectiveCenter = new THREE.Vector3(0, 0, 2);
 
@@ -149,7 +160,30 @@ export class ParticleMorpher {
     for (const config of modelConfigs) {
       let positions: Float32Array;
 
-      if (config.geometry) {
+      if (config.precomputedPositions) {
+        // Use pre-computed positions (e.g., from FBX skinned mesh extraction)
+        const raw = config.precomputedPositions;
+        const rawCount = raw.length / 3;
+        if (rawCount >= this.particleCount) {
+          const step = Math.max(1, Math.ceil(rawCount / this.particleCount));
+          const sampled: number[] = [];
+          for (let i = 0; i < rawCount && sampled.length / 3 < this.particleCount; i++) {
+            if (i % step === 0) {
+              sampled.push(raw[i * 3], raw[i * 3 + 1], raw[i * 3 + 2]);
+            }
+          }
+          positions = new Float32Array(sampled);
+        } else {
+          positions = new Float32Array(this.particleCount * 3);
+          for (let i = 0; i < this.particleCount; i++) {
+            const src = (i % rawCount) * 3;
+            positions[i * 3] = raw[src];
+            positions[i * 3 + 1] = raw[src + 1];
+            positions[i * 3 + 2] = raw[src + 2];
+          }
+        }
+        console.log(`ParticleMorpher: loaded ${config.name} from precomputed (${rawCount} → ${positions.length / 3} pts)`);
+      } else if (config.geometry) {
         positions = createShapePoints(config.geometry, this.particleCount);
       } else if (config.modelPath) {
         // GLB .bin pipeline
@@ -473,6 +507,11 @@ void main() {`
 
   update(delta: number, scrollProgress: number, mouseWorldPos: THREE.Vector3 | null, mouseNorm?: THREE.Vector2, mouseSpeed?: number) {
     if (!this.points || this.shapeTargets.length === 0) return;
+
+    // Call per-shape animation updaters (e.g., walking FBX)
+    for (const [, updater] of this.shapeUpdaters) {
+      updater(delta);
+    }
 
     // Sync depth uniforms
     this.depthNearMulUniform.value = particleConfig.depthNearMul;

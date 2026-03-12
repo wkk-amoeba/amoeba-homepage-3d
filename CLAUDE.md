@@ -17,6 +17,7 @@ scripts/
 
 public/models/
 ├── *.glb                    # 원본 3D 모델 (빌드 타임 전용)
+├── Walking.fbx              # Mixamo 걷기 애니메이션 FBX (런타임 로드)
 └── vertices/
     └── *.bin                # 사전 추출된 버텍스 바이너리 (런타임 사용)
 
@@ -26,6 +27,7 @@ src/
 ├── scene/
 │   ├── SceneManager.ts      # 씬 관리자 (진입점)
 │   ├── ParticleBackground.ts # 배경 원통형 파티클
+│   ├── HumanParticleScene.ts # 독립 FBX 걷기 파티클 씬 (human.html용)
 │   └── shapes/
 │       ├── ModelShape.ts    # 개별 모델 파티클 렌더링 및 스크롤 애니메이션
 │       ├── ParticleMorpher.ts # 다중 shape 간 파티클 모핑 (스크롤 전환)
@@ -36,7 +38,9 @@ src/
 │   ├── scrollManager.ts     # 스크롤 상태 관리
 │   ├── circleTexture.ts
 │   └── shapeGenerators.ts
-└── main.ts
+├── main.ts                  # 메인 페이지 (index.html)
+├── human.ts                 # 독립 걷기 사람 페이지 (human.html)
+└── experiment.ts            # 실험 페이지 — 4개 shape + 걷기 사람 (experiment.html)
 ```
 
 ## GLB → 파티클 파이프라인
@@ -81,6 +85,33 @@ Float32Array → .bin 저장                 매 프레임 스크롤 + 마우스
 
 여러 GLB shape를 동시에 로드하고, 스크롤 위치에 따라 파티클이 한 형태에서 다른 형태로 모핑되는 기능.
 동일한 파티클 풀로 여러 shape 간 전환을 부드럽게 연출.
+
+- `setShapeUpdater(idx, callback)`: 특정 shape에 매 프레임 호출되는 애니메이션 콜백 등록
+- `ready: Promise<void>`: shape 로딩 완료 시 resolve되는 프로미스
+- `precomputedPositions`: ModelData에 런타임 주입 가능한 Float32Array 지원
+
+### FBX 걷기 애니메이션 파이프라인 (experiment.ts)
+
+```
+[런타임]
+Walking.fbx → FBXLoader
+  ↓
+SkinnedMesh + AnimationMixer (root motion 제거: Hips X/Z = 0)
+  ↓
+초기 프레임 추출 → precomputedPositions로 ParticleMorpher에 전달
+  ↓
+매 프레임 shapeUpdater 콜백:
+  mixer.update(delta) → skeleton.update()
+  → applyBoneTransform() → matrixWorld 적용
+  → 정규화(8유닛 * scale) → shapeTarget.positions 덮어쓰기
+```
+
+핵심 API 호출 순서 (per-vertex, per-frame):
+```typescript
+target.fromBufferAttribute(posAttr, vertIdx);  // rest pose 위치
+mesh.applyBoneTransform(vertIdx, target);       // 본 변환 적용
+target.applyMatrix4(mesh.matrixWorld);           // 월드 좌표 변환
+```
 
 ### 바이너리 포맷 (.bin)
 
@@ -222,6 +253,17 @@ PERFORMANCE_CONFIG = {
 - `springEnabled`: 스프링 물리 (velocity, damping 계산)
 - 마우스 interact: scatter/attract/orbit 오프셋 계산
 - 계산 결과를 `BufferAttribute.needsUpdate = true`로 GPU에 업로드
+
+## 멀티페이지 구성
+
+| 페이지 | URL | 엔트리포인트 | 설명 |
+| ------ | --- | ------------ | ---- |
+| 메인 | `/` | `src/main.ts` | 3개 GLB shape 스크롤 전환 (Sphere, Box, Cone) |
+| 걷기 사람 | `/human.html` | `src/human.ts` | FBX 독립 뷰어 (OrbitControls, 사이드뷰) |
+| 실험 | `/experiment.html` | `src/experiment.ts` | 4개 shape (3 GLB + 걷기 사람) + 디버그 패널 |
+| 크로노그래피 | `/chronography.html` | - | 별도 페이지 |
+
+Vite 멀티페이지 설정: `vite.config.ts`의 `rollupOptions.input`에 등록.
 
 ## 개발 명령어
 ```bash
