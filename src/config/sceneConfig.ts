@@ -42,6 +42,7 @@ export const models: ModelData[] = [
   { id: 1, name: 'Box', modelPath: '/models/high_cube.glb', scale: 0.27, position: [0.8, -0.7, 0] },
   { id: 2, name: 'Cone', modelPath: '/models/high_cone.glb', scale: 0.315, position: [0, 0, 0] },
   { id: 3, name: 'Human', scale: 0.35, position: [0, -1.4, 0] },  // precomputedPositions는 런타임에 주입
+  { id: 4, name: 'City', modelPath: '/models/city_test.glb', scale: 1.0, position: [0, 0, 0] },
 ];
 
 // 파티클 렌더링 모드
@@ -93,10 +94,10 @@ export const particleConfig = {
 export const scrollConfig = {
   introEnd: 0,             // 인트로 없음
   sectionStart: 0,         // 첫 모델 즉시 시작
-  sectionGap: 0.25,        // 25% 간격 (4개 모델 균등 배분)
-  sectionDuration: 0.25,   // 25% 지속 (sectionGap과 동일 → 갭 없음)
+  sectionGap: 0.2,        // 20% 간격 (5개 모델 균등 배분)
+  sectionDuration: 0.2,   // 20% 지속 (sectionGap과 동일 → 갭 없음)
   previewOffset: 0,        // 프리뷰 없음
-  modelCount: 4,
+  modelCount: 5,
 };
 
 // 애니메이션 페이즈 설정 (진입 → 고정 → 퇴장)
