@@ -26,7 +26,7 @@ const MODELS = [
   { name: 'high_cone', file: 'high_cone.glb' },
   { name: 'city_test', file: 'city_test.glb' },
   { name: 'city_shanghai', file: 'city-_shanghai-sandboxie.glb', maxVertices: 50_000 },
-  { name: 'san_francisco_city', file: 'san_francisco_city.glb', maxVertices: 50_000 },
+  { name: 'san_francisco_city', file: 'san_francisco_city.glb', maxVertices: 50_000, heightBias: { threshold: 0.3, weight: 5 } },
 ];
 
 const MAX_VERTICES = 15_000;
@@ -167,9 +167,31 @@ function triangleArea(v0, v1, v2) {
   return 0.5 * Math.sqrt(cx * cx + cy * cy + cz * cz);
 }
 
-function sampleTriangleSurface(triangles, targetCount) {
-  // Compute cumulative area distribution
-  const areas = triangles.map(t => triangleArea(t.v0, t.v1, t.v2));
+function sampleTriangleSurface(triangles, targetCount, heightBias = null) {
+  // Compute Y bounding box for height bias normalization
+  let minY = 0, maxY = 1;
+  if (heightBias) {
+    minY = Infinity; maxY = -Infinity;
+    for (const t of triangles) {
+      for (const v of [t.v0, t.v1, t.v2]) {
+        if (v[1] < minY) minY = v[1];
+        if (v[1] > maxY) maxY = v[1];
+      }
+    }
+  }
+
+  // Compute cumulative area distribution (with optional height bias)
+  const areas = triangles.map(t => {
+    let a = triangleArea(t.v0, t.v1, t.v2);
+    if (heightBias && maxY > minY) {
+      const centerY = (t.v0[1] + t.v1[1] + t.v2[1]) / 3;
+      const normalizedY = (centerY - minY) / (maxY - minY);
+      if (normalizedY >= heightBias.threshold) {
+        a *= heightBias.weight;
+      }
+    }
+    return a;
+  });
   const totalArea = areas.reduce((s, a) => s + a, 0);
   const cdf = new Float64Array(areas.length);
   cdf[0] = areas[0];
@@ -268,7 +290,7 @@ async function main() {
     }
 
     const targetCount = model.maxVertices || MAX_VERTICES;
-    const sampled = sampleTriangleSurface(triangles, targetCount);
+    const sampled = sampleTriangleSurface(triangles, targetCount, model.heightBias || null);
     centerPoints(sampled);
     const float32 = new Float32Array(sampled);
     const sampledCount = sampled.length / 3;
