@@ -155,7 +155,8 @@ export class ParticleMorpher {
   private async loadShapes(modelConfigs: ModelData[]) {
     const multiplier = getParticleMultiplier();
     const baseCount = PERFORMANCE_CONFIG.maxVerticesPerModel;
-    this.particleCount = Math.floor(baseCount * multiplier);
+    const maxModelCount = Math.max(baseCount, ...modelConfigs.map(m => m.particleCount || 0));
+    this.particleCount = Math.floor(maxModelCount * multiplier);
 
     for (const config of modelConfigs) {
       let positions: Float32Array;

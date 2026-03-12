@@ -9,7 +9,7 @@
  */
 
 import { NodeIO } from '@gltf-transform/core';
-import { KHRDracoMeshCompression } from '@gltf-transform/extensions';
+import { KHRDracoMeshCompression, KHRMaterialsPBRSpecularGlossiness } from '@gltf-transform/extensions';
 import draco3d from 'draco3dgltf';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -25,7 +25,8 @@ const MODELS = [
   { name: 'high_cube', file: 'high_cube.glb' },
   { name: 'high_cone', file: 'high_cone.glb' },
   { name: 'city_test', file: 'city_test.glb' },
-  { name: 'city_shanghai', file: 'city-_shanghai-sandboxie.glb' },
+  { name: 'city_shanghai', file: 'city-_shanghai-sandboxie.glb', maxVertices: 50_000 },
+  { name: 'san_francisco_city', file: 'san_francisco_city.glb', maxVertices: 50_000 },
 ];
 
 const MAX_VERTICES = 15_000;
@@ -241,7 +242,7 @@ async function main() {
   console.log('Extracting vertices from GLB models...\n');
 
   const io = new NodeIO()
-    .registerExtensions([KHRDracoMeshCompression])
+    .registerExtensions([KHRDracoMeshCompression, KHRMaterialsPBRSpecularGlossiness])
     .registerDependencies({
       'draco3d.decoder': await draco3d.createDecoderModule(),
     });
@@ -266,7 +267,7 @@ async function main() {
       continue;
     }
 
-    const targetCount = MAX_VERTICES;
+    const targetCount = model.maxVertices || MAX_VERTICES;
     const sampled = sampleTriangleSurface(triangles, targetCount);
     centerPoints(sampled);
     const float32 = new Float32Array(sampled);
