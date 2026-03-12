@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Human Particle Walker</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; font-family: 'Inter', sans-serif; }
+    canvas { display: block; }
+    #info {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: rgba(255,255,255,0.5);
+      font-size: 13px;
+      pointer-events: none;
+      z-index: 10;
+    }
+    #back-link {
+      position: fixed;
+      top: 24px;
+      left: 24px;
+      color: rgba(255,255,255,0.6);
+      font-size: 14px;
+      text-decoration: none;
+      z-index: 10;
+      transition: color 0.2s;
+    }
+    #back-link:hover { color: #fff; }
+  </style>
+</head>
+<body>
+  <a id="back-link" href="/">← Back</a>
+  <div id="info">Drag to rotate · Scroll to zoom</div>
+  <div id="canvas-container"></div>
+  <script type="module" src="/src/human.ts"></script>
+</body>
+</html>

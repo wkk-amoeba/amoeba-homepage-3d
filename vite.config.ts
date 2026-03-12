@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => ({
       input: {
         main: resolve(__dirname, 'index.html'),
         chronography: resolve(__dirname, 'chronography.html'),
+        human: resolve(__dirname, 'human.html'),
       },
       output: {
         manualChunks: {
