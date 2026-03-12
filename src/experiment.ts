@@ -1,14 +1,10 @@
 import './style.css';
 import { SceneManager } from './scene/SceneManager';
-import { models, scrollConfig } from './config/sceneConfig';
+import { models } from './config/sceneConfig';
 import { loadFBXWalking, registerWalkingUpdater } from './utils/fbxWalking';
 
 // Main
 document.addEventListener('DOMContentLoaded', async () => {
-  // Override scroll config for 4 models
-  scrollConfig.sectionGap = 0.25;
-  scrollConfig.sectionDuration = 0.25;
-  scrollConfig.modelCount = 4;
 
   // Load FBX walking data and inject into Human model config
   const humanModel = models.find((m) => m.name === 'Human');
