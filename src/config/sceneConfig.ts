@@ -41,8 +41,9 @@ export const models: ModelData[] = [
   { id: 0, name: 'Sphere', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [0, 0, 0] },
   { id: 1, name: 'Box', modelPath: '/models/high_cube.glb', scale: 0.27, position: [0.8, -0.7, 0] },
   { id: 2, name: 'Cone', modelPath: '/models/high_cone.glb', scale: 0.315, position: [0, 0, 0] },
-  { id: 3, name: 'Human', scale: 0.35, position: [0, -1.4, 0] },  // precomputedPositions는 런타임에 주입
-  { id: 4, name: 'City', modelPath: '/models/san_francisco_city.glb', scale: 1.0, position: [0, -0.7, 0], particleCount: 50000 },
+  { id: 3, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.4, position: [0, 0, 0] },
+  { id: 4, name: 'Human', scale: 0.35, position: [0, -1.4, 0] },  // precomputedPositions는 런타임에 주입
+  { id: 5, name: 'City', modelPath: '/models/san_francisco_city.glb', scale: 1.0, position: [0, -0.7, 0], particleCount: 50000 },
 ];
 
 // 파티클 렌더링 모드
@@ -90,14 +91,14 @@ export const particleConfig = {
   showDomeDebug: false,          // 돔 영역 빨간 원 표시
 };
 
-// 스크롤 설정 (3개 모델용)
+// 스크롤 설정 (6개 모델용)
 export const scrollConfig = {
   introEnd: 0,             // 인트로 없음
   sectionStart: 0,         // 첫 모델 즉시 시작
-  sectionGap: 0.2,        // 20% 간격 (5개 모델 균등 배분)
-  sectionDuration: 0.2,   // 20% 지속 (sectionGap과 동일 → 갭 없음)
+  sectionGap: 1 / 6,       // ~16.7% 간격 (6개 모델 균등 배분)
+  sectionDuration: 1 / 6,  // ~16.7% 지속
   previewOffset: 0,        // 프리뷰 없음
-  modelCount: 5,
+  modelCount: 6,
 };
 
 // 애니메이션 페이즈 설정 (진입 → 고정 → 퇴장)
