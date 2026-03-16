@@ -42,8 +42,9 @@ export async function loadFBXWalking(): Promise<FBXWalkingData> {
     const clip = animations[0];
 
     // Strip root motion (zero X/Z on Hips position track)
+    // GLB uses '.translation', FBX uses '.position'
     clip.tracks = clip.tracks.filter((track) => {
-      if (track.name.endsWith('.position')) {
+      if (track.name.endsWith('.position') || track.name.endsWith('.translation')) {
         const boneName = track.name.split('.')[0];
         if (boneName.includes('Hips') || boneName.includes('hips')) {
           const values = track.values;

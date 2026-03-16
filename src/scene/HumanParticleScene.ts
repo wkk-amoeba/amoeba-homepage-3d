@@ -90,9 +90,9 @@ export class HumanParticleScene {
       const clip = animations[0];
 
       // Remove position tracks on the root bone to prevent forward movement
+      // GLB uses '.translation', FBX uses '.position'
       clip.tracks = clip.tracks.filter((track) => {
-        // Mixamo root bone is typically the first bone; position tracks cause drift
-        if (track.name.endsWith('.position')) {
+        if (track.name.endsWith('.position') || track.name.endsWith('.translation')) {
           // Keep only hip vertical bob by zeroing X/Z on the root
           const parts = track.name.split('.');
           const boneName = parts[0];
