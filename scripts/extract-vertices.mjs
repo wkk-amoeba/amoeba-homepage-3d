@@ -270,7 +270,7 @@ async function main() {
       'draco3d.decoder': await draco3d.createDecoderModule(),
     });
 
-  const modelsDir = path.resolve('public/models');
+  const modelsDir = path.resolve('models-src');
   const outputDir = path.resolve('public/models/vertices');
   fs.mkdirSync(outputDir, { recursive: true });
 
