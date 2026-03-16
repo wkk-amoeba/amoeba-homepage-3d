@@ -43,7 +43,7 @@ export const models: ModelData[] = [
   { id: 2, name: 'Cone', modelPath: '/models/high_cone.glb', scale: 0.315, position: [0, 0, 0] },
   { id: 3, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.4, position: [0, 0, 0] },
   { id: 4, name: 'Human', scale: 0.35, position: [0, -1.4, 0] },  // precomputedPositions는 런타임에 주입
-  { id: 5, name: 'City', modelPath: '/models/san_francisco_city.glb', scale: 1.0, position: [0, -0.7, 0], particleCount: 50000 },
+  { id: 5, name: 'City', modelPath: '/models/san_francisco_city.glb', scale: 1.0, position: [0, -1, 0], particleCount: 50000 },
 ];
 
 // 파티클 렌더링 모드
