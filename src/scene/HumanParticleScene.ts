@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { getCircleTexture } from '../utils/circleTexture';
 
 const MAX_PARTICLES = 10000;
@@ -56,8 +57,12 @@ export class HumanParticleScene {
   }
 
   private async loadFBX() {
-    const loader = new FBXLoader();
-    const fbx = await loader.loadAsync('/models/Walking.fbx');
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
+    const loader = new GLTFLoader();
+    loader.setDRACOLoader(dracoLoader);
+    const gltf = await loader.loadAsync('/models/Walking.glb');
+    const fbx = gltf.scene;
 
     // Find the SkinnedMesh
     let skinnedMesh: THREE.SkinnedMesh | null = null;
@@ -80,8 +85,9 @@ export class HumanParticleScene {
     this.scene.add(fbx);
 
     // Setup animation — strip root motion (walk in place)
-    if (fbx.animations.length > 0) {
-      const clip = fbx.animations[0];
+    const animations = gltf.animations;
+    if (animations.length > 0) {
+      const clip = animations[0];
 
       // Remove position tracks on the root bone to prevent forward movement
       clip.tracks = clip.tracks.filter((track) => {

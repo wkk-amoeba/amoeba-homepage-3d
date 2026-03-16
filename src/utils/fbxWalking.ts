@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { PERFORMANCE_CONFIG, getParticleMultiplier } from '../config/sceneConfig';
 
 export interface FBXWalkingData {
@@ -12,12 +13,16 @@ export interface FBXWalkingData {
 }
 
 /**
- * Load Walking.fbx, setup AnimationMixer, compute normalization,
+ * Load Walking.glb, setup AnimationMixer, compute normalization,
  * and return everything needed for per-frame vertex extraction.
  */
 export async function loadFBXWalking(): Promise<FBXWalkingData> {
-  const loader = new FBXLoader();
-  const fbx = await loader.loadAsync('/models/Walking.fbx');
+  const dracoLoader = new DRACOLoader();
+  dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
+  const loader = new GLTFLoader();
+  loader.setDRACOLoader(dracoLoader);
+  const gltf = await loader.loadAsync('/models/Walking.glb');
+  const fbx = gltf.scene;
 
   // Find SkinnedMesh
   let skinnedMesh: THREE.SkinnedMesh | null = null;
@@ -32,8 +37,9 @@ export async function loadFBXWalking(): Promise<FBXWalkingData> {
 
   // Setup animation
   const mixer = new THREE.AnimationMixer(fbx);
-  if (fbx.animations.length > 0) {
-    const clip = fbx.animations[0];
+  const animations = gltf.animations;
+  if (animations.length > 0) {
+    const clip = animations[0];
 
     // Strip root motion (zero X/Z on Hips position track)
     clip.tracks = clip.tracks.filter((track) => {
