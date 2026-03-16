@@ -98,12 +98,12 @@ export class HumanParticleScene {
           const boneName = parts[0];
           // The root bone in Mixamo is usually "mixamorigHips"
           if (boneName.includes('Hips') || boneName.includes('hips')) {
-            // Zero out the X (lateral) and Z (forward) channels, keep Y (vertical)
+            // Zero out X (lateral) and Y (forward in GLB), keep Z (vertical)
             const values = track.values;
             for (let i = 0; i < values.length; i += 3) {
-              values[i] = 0;       // X
-              // values[i+1] kept   // Y (vertical bob)
-              values[i + 2] = 0;   // Z
+              values[i] = 0;       // X (lateral)
+              values[i + 1] = 0;   // Y (forward in GLB after Blender axis conversion)
+              // values[i+2] kept  // Z (vertical)
             }
             return true;
           }

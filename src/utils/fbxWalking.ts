@@ -49,8 +49,9 @@ export async function loadFBXWalking(): Promise<FBXWalkingData> {
         if (boneName.includes('Hips') || boneName.includes('hips')) {
           const values = track.values;
           for (let i = 0; i < values.length; i += 3) {
-            values[i] = 0;
-            values[i + 2] = 0;
+            values[i] = 0;       // X (lateral)
+            values[i + 1] = 0;   // Y (forward in GLB after Blender axis conversion)
+            // values[i+2] kept  // Z (vertical)
           }
         }
       }
