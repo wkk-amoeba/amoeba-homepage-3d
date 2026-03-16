@@ -264,6 +264,7 @@ export class DebugPanel {
         posX: shape.worldOffset.x,
         posY: shape.worldOffset.y,
         posZ: shape.worldOffset.z,
+        holdScatter: shape.holdScatter,
       };
 
       folder
@@ -280,6 +281,11 @@ export class DebugPanel {
         .add(params, 'posZ', -10, 10, 0.1)
         .name('Position Z')
         .onChange((v: number) => { morpher.setShapePosition(index, params.posX, params.posY, v); });
+
+      folder
+        .add(params, 'holdScatter', 0, 0.1, 0.001)
+        .name('Hold Scatter')
+        .onChange((v: number) => { shape.holdScatter = v; });
 
       folder.open();
     });

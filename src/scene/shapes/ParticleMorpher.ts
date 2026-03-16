@@ -9,6 +9,7 @@ interface ShapeTarget {
   name: string;
   zMin: number;
   zMax: number;
+  holdScatter: number;        // hold 상태 scatter 비율 (0=완전 형태, >0=흩어짐)
 }
 
 interface HoldPhase {
@@ -255,6 +256,21 @@ export class ParticleMorpher {
         positions[i] *= finalScale;
       }
 
+      // Apply per-model rotation (e.g., tilting a gyro)
+      if (config.rotation) {
+        const euler = new THREE.Euler(config.rotation[0], config.rotation[1], config.rotation[2]);
+        const mat = new THREE.Matrix4().makeRotationFromEuler(euler);
+        const v = new THREE.Vector3();
+        for (let i = 0; i < this.particleCount; i++) {
+          const i3 = i * 3;
+          v.set(positions[i3], positions[i3 + 1], positions[i3 + 2]);
+          v.applyMatrix4(mat);
+          positions[i3] = v.x;
+          positions[i3 + 1] = v.y;
+          positions[i3 + 2] = v.z;
+        }
+      }
+
       // Compute Z bounds for depth shader
       let zMin = Infinity, zMax = -Infinity;
       for (let i = 0; i < this.particleCount; i++) {
@@ -270,6 +286,7 @@ export class ParticleMorpher {
         name: config.name,
         zMin,
         zMax,
+        holdScatter: config.holdScatter || 0,
       });
     }
 
@@ -601,10 +618,11 @@ void main() {`
 
       for (let i = 0; i < this.particleCount; i++) {
         const i3 = i * 3;
-        // Lerp: scattered position → target shape position
-        const targetX = first.positions[i3] + first.worldOffset.x;
-        const targetY = first.positions[i3 + 1] + first.worldOffset.y;
-        const targetZ = first.positions[i3 + 2] + first.worldOffset.z;
+        // Lerp: scattered position → target shape position (including holdScatter)
+        const hs = first.holdScatter;
+        const targetX = first.positions[i3] + first.worldOffset.x + (hs > 0 ? this.scatterOffsets[i3] * hs : 0);
+        const targetY = first.positions[i3 + 1] + first.worldOffset.y + (hs > 0 ? this.scatterOffsets[i3 + 1] * hs : 0);
+        const targetZ = first.positions[i3 + 2] + first.worldOffset.z + (hs > 0 ? this.scatterOffsets[i3 + 2] * hs : 0);
         let bx = this.scatterOffsets[i3] * scatter + targetX * eased;
         let by = this.scatterOffsets[i3 + 1] * scatter + targetY * eased;
         let bz = this.scatterOffsets[i3 + 2] * scatter + targetZ * eased;
@@ -734,17 +752,25 @@ void main() {`
         baseX = shape.positions[i3] + shape.worldOffset.x;
         baseY = shape.positions[i3 + 1] + shape.worldOffset.y;
         baseZ = shape.positions[i3 + 2] + shape.worldOffset.z;
+        // Apply holdScatter: add scatter offset to keep particles partially dispersed
+        if (shape.holdScatter > 0) {
+          baseX += this.scatterOffsets[i3] * shape.holdScatter;
+          baseY += this.scatterOffsets[i3 + 1] * shape.holdScatter;
+          baseZ += this.scatterOffsets[i3 + 2] * shape.holdScatter;
+        }
       } else {
         const from = this.shapeTargets[phase.fromIdx];
         const to = this.shapeTargets[phase.toIdx];
         const t = this.smoothstep(phase.t);
 
-        const fromX = from.positions[i3] + from.worldOffset.x;
-        const fromY = from.positions[i3 + 1] + from.worldOffset.y;
-        const fromZ = from.positions[i3 + 2] + from.worldOffset.z;
-        const toX = to.positions[i3] + to.worldOffset.x;
-        const toY = to.positions[i3 + 1] + to.worldOffset.y;
-        const toZ = to.positions[i3 + 2] + to.worldOffset.z;
+        const fhs = from.holdScatter;
+        const ths = to.holdScatter;
+        const fromX = from.positions[i3] + from.worldOffset.x + (fhs > 0 ? this.scatterOffsets[i3] * fhs : 0);
+        const fromY = from.positions[i3 + 1] + from.worldOffset.y + (fhs > 0 ? this.scatterOffsets[i3 + 1] * fhs : 0);
+        const fromZ = from.positions[i3 + 2] + from.worldOffset.z + (fhs > 0 ? this.scatterOffsets[i3 + 2] * fhs : 0);
+        const toX = to.positions[i3] + to.worldOffset.x + (ths > 0 ? this.scatterOffsets[i3] * ths : 0);
+        const toY = to.positions[i3 + 1] + to.worldOffset.y + (ths > 0 ? this.scatterOffsets[i3 + 1] * ths : 0);
+        const toZ = to.positions[i3 + 2] + to.worldOffset.z + (ths > 0 ? this.scatterOffsets[i3 + 2] * ths : 0);
 
         // Lerp between shapes
         const lerpX = fromX + (toX - fromX) * t;
