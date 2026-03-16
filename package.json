@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "prebuild": "node scripts/extract-vertices.mjs",
+    "prebuild": "node --max-old-space-size=8192 scripts/extract-vertices.mjs",
     "dev": "vite",
     "build": "npm run prebuild && tsc && vite build",
     "build:debug": "npm run prebuild && tsc && vite build --mode development",

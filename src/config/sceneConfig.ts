@@ -45,6 +45,7 @@ export const models: ModelData[] = [
   { id: 3, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.4, position: [0, 0, 0], rotation: [0, 0, 0.122], holdScatter: 0.01 },
   { id: 4, name: 'Human', scale: 0.35, position: [0, -1.4, 0], holdScatter: 0.006 },  // precomputedPositions는 런타임에 주입
   { id: 5, name: 'City', modelPath: '/models/san_francisco_city.glb', scale: 1.0, position: [0, -1, 0], particleCount: 50000 },
+  { id: 6, name: 'City2', modelPath: '/models/city_23.glb', scale: 1.0, position: [0, -1, 0], particleCount: 50000 },
 ];
 
 // 파티클 렌더링 모드
@@ -96,10 +97,10 @@ export const particleConfig = {
 export const scrollConfig = {
   introEnd: 0,             // 인트로 없음
   sectionStart: 0,         // 첫 모델 즉시 시작
-  sectionGap: 1 / 6,       // ~16.7% 간격 (6개 모델 균등 배분)
-  sectionDuration: 1 / 6,  // ~16.7% 지속
+  sectionGap: 1 / 7,       // ~14.3% 간격 (7개 모델 균등 배분)
+  sectionDuration: 1 / 7,  // ~14.3% 지속
   previewOffset: 0,        // 프리뷰 없음
-  modelCount: 6,
+  modelCount: 7,
 };
 
 // 애니메이션 페이즈 설정 (진입 → 고정 → 퇴장)
