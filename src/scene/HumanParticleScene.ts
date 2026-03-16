@@ -72,7 +72,8 @@ export class HumanParticleScene {
       return;
     }
 
-    this.skinnedMesh = skinnedMesh;
+    const mesh = skinnedMesh as THREE.SkinnedMesh;
+    this.skinnedMesh = mesh;
 
     // Add to scene (invisible — we only use it for skinning computation)
     fbx.visible = false;
@@ -110,7 +111,7 @@ export class HumanParticleScene {
     }
 
     // Build sample indices (subsample vertices for performance)
-    const geo = this.skinnedMesh.geometry;
+    const geo = mesh.geometry;
     const totalVertices = geo.attributes.position.count;
     const sampleCount = Math.min(MAX_PARTICLES, totalVertices);
 
