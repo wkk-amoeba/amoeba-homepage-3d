@@ -1,6 +1,23 @@
-import { scrollConfig, introConfig } from '../config/sceneConfig';
+import { scrollConfig, introConfig, models } from '../config/sceneConfig';
 
 export type ScrollListener = (progress: number) => void;
+
+// Precompute section bounds from model spans
+function computeSectionBounds(): { start: number; end: number }[] {
+  const { sectionStart, sectionGap } = scrollConfig;
+  const bounds: { start: number; end: number }[] = [];
+  let offset = sectionStart;
+  for (const m of models) {
+    const span = m.sectionSpan ?? 1;
+    const start = offset;
+    const end = offset + span * sectionGap;
+    bounds.push({ start, end });
+    offset = end;
+  }
+  return bounds;
+}
+
+const sectionBoundsCache = computeSectionBounds();
 
 class ScrollManager {
   private targetProgress = 0;  // 스크롤 이벤트의 즉시값
@@ -67,49 +84,97 @@ class ScrollManager {
     }
 
     sections.forEach((section, index) => {
-      const content = section.querySelector('.shape-content') as HTMLElement;
-      if (!content) return;
+      const contents = section.querySelectorAll('.shape-content') as NodeListOf<HTMLElement>;
+      if (!contents.length) return;
 
-      const start = scrollConfig.sectionStart + index * scrollConfig.sectionGap;
-      const end = start + scrollConfig.sectionDuration;
-
-      if (this.progress < start || this.progress > end) {
-        content.style.opacity = '0';
+      const bounds = sectionBoundsCache[index];
+      if (!bounds) {
+        contents.forEach(c => c.style.opacity = '0');
         return;
       }
 
-      const local = (this.progress - start) / scrollConfig.sectionDuration;
-      let opacity = 1;
+      const start = bounds.start;
+      const end = bounds.end;
+      const duration = end - start;
 
-      // Fade in (skip for first section — controlled by intro)
-      if (index > 0 && local < fadeInRatio) {
-        opacity = local / fadeInRatio;
-      }
-      // Fade out (skip for last section — stay visible)
-      else if (index < sections.length - 1 && local > 1 - fadeOutRatio) {
-        opacity = 1 - (local - (1 - fadeOutRatio)) / fadeOutRatio;
+      if (this.progress < start || this.progress > end) {
+        contents.forEach(c => c.style.opacity = '0');
+        return;
       }
 
-      // First section: gate by intro completion fade-in
-      if (index === 0) {
-        opacity *= this.introTextOpacity;
-      }
+      const local = (this.progress - start) / duration;
+      const subBoundary = section.getAttribute('data-sub-boundary');
 
-      content.style.opacity = String(opacity);
+      if (subBoundary && contents.length > 1) {
+        // Sub-section mode: crossfade between sub-contents at the boundary point
+        const boundary = parseFloat(subBoundary);
+        const crossFadeWidth = 0.08; // 8% of local progress for crossfade
+
+        contents.forEach(content => {
+          const subIdx = parseInt(content.getAttribute('data-sub') || '0', 10);
+          let subOpacity: number;
+
+          if (subIdx === 0) {
+            // First sub: visible before boundary, fades out at boundary
+            if (local < boundary - crossFadeWidth) {
+              subOpacity = 1;
+            } else if (local < boundary + crossFadeWidth) {
+              subOpacity = 1 - (local - (boundary - crossFadeWidth)) / (2 * crossFadeWidth);
+            } else {
+              subOpacity = 0;
+            }
+          } else {
+            // Second sub: fades in at boundary, visible after
+            if (local < boundary - crossFadeWidth) {
+              subOpacity = 0;
+            } else if (local < boundary + crossFadeWidth) {
+              subOpacity = (local - (boundary - crossFadeWidth)) / (2 * crossFadeWidth);
+            } else {
+              subOpacity = 1;
+            }
+          }
+
+          // Apply section-level fade in/out
+          if (index > 0 && local < fadeInRatio) {
+            subOpacity *= local / fadeInRatio;
+          } else if (index < sections.length - 1 && local > 1 - fadeOutRatio) {
+            subOpacity *= 1 - (local - (1 - fadeOutRatio)) / fadeOutRatio;
+          }
+
+          // First section: gate by intro completion
+          if (index === 0) {
+            subOpacity *= this.introTextOpacity;
+          }
+
+          content.style.opacity = String(subOpacity);
+        });
+      } else {
+        // Single content mode (original behavior)
+        const content = contents[0];
+        let opacity = 1;
+
+        if (index > 0 && local < fadeInRatio) {
+          opacity = local / fadeInRatio;
+        } else if (index < sections.length - 1 && local > 1 - fadeOutRatio) {
+          opacity = 1 - (local - (1 - fadeOutRatio)) / fadeOutRatio;
+        }
+
+        if (index === 0) {
+          opacity *= this.introTextOpacity;
+        }
+
+        content.style.opacity = String(opacity);
+      }
     });
   }
 
   getCurrentSection(): number {
-    const { sectionStart, sectionGap, sectionDuration, modelCount } = scrollConfig;
-
     // 인트로 구간이면 -1 반환
-    if (this.progress < sectionStart) return -1;
+    const firstStart = sectionBoundsCache[0]?.start ?? 0;
+    if (this.progress < firstStart) return -1;
 
-    // 각 섹션의 중간 지점을 기준으로 현재 섹션 계산
-    for (let i = 0; i < modelCount; i++) {
-      const start = sectionStart + i * sectionGap;
-      const end = start + sectionDuration;
-
+    for (let i = 0; i < sectionBoundsCache.length; i++) {
+      const { start, end } = sectionBoundsCache[i];
       if (this.progress >= start && this.progress <= end) {
         return i;
       }

@@ -2,8 +2,7 @@ import './style.css';
 import { SceneManager } from './scene/SceneManager';
 import { models } from './config/sceneConfig';
 import { loadFBXWalking, registerWalkingUpdater } from './utils/fbxWalking';
-import { registerSphereDeform } from './utils/sphereDeform';
-import { registerSphereMetaball, registerSphereMetaballLinear } from './utils/sphereMetaball';
+import { registerUnifiedSphere } from './utils/sphereUnified';
 
 // Main
 document.addEventListener('DOMContentLoaded', async () => {
@@ -31,12 +30,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       registerWalkingUpdater(morpher, humanIdx, walkData, humanModel.scale);
     }
 
-    // Sphere deformation (crumple breathing) & metaball
-    models.forEach((m, idx) => {
-      if (m.name === 'Sphere') registerSphereDeform(morpher, idx);
-      if (m.name === 'Sphere2') registerSphereMetaball(morpher, idx);
-      if (m.name === 'Sphere3') registerSphereMetaballLinear(morpher, idx);
-    });
+    // Unified sphere: scroll-driven effect interpolation (deform → metaball → linear)
+    const sphereIdx = models.findIndex((m) => m.name === 'Sphere');
+    if (sphereIdx >= 0) {
+      registerUnifiedSphere(morpher, sphereIdx);
+    }
   }
 
   // Always show debug panel in experiment page

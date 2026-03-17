@@ -1,8 +1,7 @@
 import GUI from 'lil-gui';
 import { SceneManager } from '../scene/SceneManager';
 import { particleConfig, backgroundConfig, animationPhases } from '../config/sceneConfig';
-import { getActiveSphereDeformConfig } from '../utils/sphereDeform';
-import { getActiveMetaballConfig, getActiveLinearConfig } from '../utils/sphereMetaball';
+import { getActiveUnifiedConfig } from '../utils/sphereUnified';
 
 export class DebugPanel {
   private gui: GUI;
@@ -284,53 +283,55 @@ export class DebugPanel {
         .name('Position Z')
         .onChange((v: number) => { morpher.setShapePosition(index, params.posX, params.posY, v); });
 
-      folder
-        .add(params, 'holdScatter', 0, 0.1, 0.001)
-        .name('Hold Scatter')
-        .onChange((v: number) => { shape.holdScatter = v; });
+      // Unified Sphere controls (deform + metaball orbital + metaball linear)
+      const unifiedCfg = shape.name === 'Sphere' ? getActiveUnifiedConfig() : null;
 
-      // Sphere deform controls
-      const sphereDeformCfg = shape.name === 'Sphere' ? getActiveSphereDeformConfig() : null;
-      if (sphereDeformCfg) {
+      if (!unifiedCfg) {
+        // Non-unified shapes: single holdScatter
+        folder
+          .add(params, 'holdScatter', 0, 0.1, 0.001)
+          .name('Hold Scatter')
+          .onChange((v: number) => { shape.holdScatter = v; });
+      }
+      if (unifiedCfg) {
+        folder.add(unifiedCfg, 'transitionWidth', 0, 0.3, 0.01).name('Transition Width');
+        folder.add(unifiedCfg, 'subSection1', 0.05, 0.5, 0.05).name('Sub1 (Deform→Orb)');
+        folder.add(unifiedCfg, 'subSection2', 0.1, 0.8, 0.05).name('Sub2 (Orb→Linear)');
+
+        folder.add(unifiedCfg, 'deformHoldScatter', 0, 0.1, 0.001).name('Scatter: Deform');
+        folder.add(unifiedCfg, 'orbitalHoldScatter', 0, 0.1, 0.001).name('Scatter: Orbital');
+        folder.add(unifiedCfg, 'orbital2HoldScatter', 0, 0.1, 0.001).name('Scatter: 위성');
+
         const deformFolder = folder.addFolder('Deform');
-        const cfg = sphereDeformCfg;
-        deformFolder.add(cfg, 'maxDeform', 0, 1.0, 0.01).name('Max Deform');
-        deformFolder.add(cfg, 'noiseScale', 0.5, 8.0, 0.1).name('Noise Scale');
-        deformFolder.add(cfg, 'breathSpeed', 0.05, 2.0, 0.05).name('Breath Speed');
-        deformFolder.add(cfg, 'breathMin', 0, 1.0, 0.05).name('Breath Min');
-        deformFolder.add(cfg, 'breathMax', 0, 1.0, 0.05).name('Breath Max');
-        deformFolder.add(cfg, 'noiseSpeed', 0, 1.0, 0.01).name('Noise Speed');
-        deformFolder.open();
-      }
+        const dc = unifiedCfg.deform;
+        deformFolder.add(dc, 'maxDeform', 0, 1.0, 0.01).name('Max Deform');
+        deformFolder.add(dc, 'noiseScale', 0.5, 8.0, 0.1).name('Noise Scale');
+        deformFolder.add(dc, 'breathSpeed', 0.05, 2.0, 0.05).name('Breath Speed');
+        deformFolder.add(dc, 'breathMin', 0, 1.0, 0.05).name('Breath Min');
+        deformFolder.add(dc, 'breathMax', 0, 1.0, 0.05).name('Breath Max');
+        deformFolder.add(dc, 'noiseSpeed', 0, 1.0, 0.01).name('Noise Speed');
 
-      // Sphere2 metaball controls (orbital)
-      const metaballCfg = shape.name === 'Sphere2' ? getActiveMetaballConfig() : null;
-      if (metaballCfg) {
-        const mbFolder = folder.addFolder('Metaball');
-        mbFolder.add(metaballCfg, 'mainRadius', 0.5, 3.0, 0.05).name('Main Radius');
-        mbFolder.add(metaballCfg, 'bobAmplitude', 0, 1.0, 0.05).name('Bob Amplitude');
-        mbFolder.add(metaballCfg, 'bobSpeed', 0.1, 3.0, 0.1).name('Bob Speed');
-        mbFolder.add(metaballCfg, 'satelliteCount', 1, 8, 1).name('Satellites');
-        mbFolder.add(metaballCfg, 'satelliteRadius', 0.1, 1.5, 0.05).name('Sat Radius');
-        mbFolder.add(metaballCfg, 'orbitRadius', 0.5, 4.0, 0.1).name('Orbit Radius');
-        mbFolder.add(metaballCfg, 'orbitSpeed', 0.1, 3.0, 0.1).name('Orbit Speed');
-        mbFolder.add(metaballCfg, 'threshold', 0.5, 2.0, 0.05).name('Threshold');
-        mbFolder.open();
-      }
+        const mbFolder = folder.addFolder('Metaball Orbital');
+        const mc = unifiedCfg.metaball;
+        mbFolder.add(mc, 'mainRadius', 0.5, 3.0, 0.05).name('Main Radius');
+        mbFolder.add(mc, 'bobAmplitude', 0, 1.0, 0.05).name('Bob Amplitude');
+        mbFolder.add(mc, 'bobSpeed', 0.1, 3.0, 0.1).name('Bob Speed');
+        mbFolder.add(mc, 'satelliteCount', 1, 8, 1).name('Satellites');
+        mbFolder.add(mc, 'satelliteRadius', 0.1, 1.5, 0.05).name('Sat Radius');
+        mbFolder.add(mc, 'orbitRadius', 0.5, 4.0, 0.1).name('Orbit Radius');
+        mbFolder.add(mc, 'orbitSpeed', 0.1, 3.0, 0.1).name('Orbit Speed');
+        mbFolder.add(mc, 'threshold', 0.5, 2.0, 0.05).name('Threshold');
 
-      // Sphere3 metaball controls (linear reciprocating)
-      const linearCfg = shape.name === 'Sphere3' ? getActiveLinearConfig() : null;
-      if (linearCfg) {
-        const lnFolder = folder.addFolder('Metaball Linear');
-        lnFolder.add(linearCfg, 'mainRadius', 0.5, 3.0, 0.05).name('Main Radius');
-        lnFolder.add(linearCfg, 'bobAmplitude', 0, 1.0, 0.05).name('Bob Amplitude');
-        lnFolder.add(linearCfg, 'bobSpeed', 0.1, 3.0, 0.1).name('Bob Speed');
-        lnFolder.add(linearCfg, 'satelliteCount', 1, 8, 1).name('Satellites');
-        lnFolder.add(linearCfg, 'satelliteRadius', 0.1, 1.5, 0.05).name('Sat Radius');
-        lnFolder.add(linearCfg, 'travelDistance', 0.5, 5.0, 0.1).name('Travel Dist');
-        lnFolder.add(linearCfg, 'travelSpeed', 0.1, 3.0, 0.1).name('Travel Speed');
-        lnFolder.add(linearCfg, 'threshold', 0.5, 2.0, 0.05).name('Threshold');
-        lnFolder.open();
+        const o2Folder = folder.addFolder('위성 (Linear Split)');
+        const o2 = unifiedCfg.orbital2;
+        o2Folder.add(o2, 'mainRadius', 0.5, 3.0, 0.05).name('Main Radius');
+        o2Folder.add(o2, 'bobAmplitude', 0, 1.0, 0.05).name('Bob Amplitude');
+        o2Folder.add(o2, 'bobSpeed', 0.1, 3.0, 0.1).name('Bob Speed');
+        o2Folder.add(o2, 'satelliteCount', 1, 8, 1).name('Satellites');
+        o2Folder.add(o2, 'satelliteRadius', 0.1, 1.5, 0.05).name('Sat Radius');
+        o2Folder.add(o2, 'travelDistance', 0.5, 5.0, 0.1).name('Travel Dist');
+        o2Folder.add(o2, 'travelSpeed', 0.1, 3.0, 0.1).name('Travel Speed');
+        o2Folder.add(o2, 'threshold', 0.5, 2.0, 0.05).name('Threshold');
       }
 
       folder.open();

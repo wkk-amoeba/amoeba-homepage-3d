@@ -35,21 +35,16 @@ export interface ModelData {
   particleCount?: number; // 모델별 파티클 수 고정값 (미지정 시 디바이스 기반 자동 결정)
   holdScatter?: number;  // hold 상태에서 유지할 scatter 비율 (0=완전 형태, 1=완전 흩어짐)
   heightSize?: { min: number; max: number }; // Y 위치 기반 파티클 크기 (아래=min, 위=max 배율)
+  sectionSpan?: number;  // 이 shape이 차지하는 스크롤 섹션 수 (기본 1)
 }
 
 // 3D 모델 정의
 // geometry가 있으면 프로그래밍 생성, modelPath가 있으면 GLB .bin 로드 -1.5, 0.3, 0
 export const models: ModelData[] = [
-  { id: 0, name: 'Sphere', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [0, 0, 0], holdScatter: 0.015 },
-  { id: 1, name: 'Sphere2', modelPath: '/models/high_shpere.glb', scale: 0.25, position: [0, 0, 0], holdScatter: 0.015 },
-  { id: 2, name: 'Sphere3', modelPath: '/models/high_shpere.glb', scale: 0.25, position: [0, 0, 0], holdScatter: 0.001 },
-  { id: 3, name: 'Box', modelPath: '/models/high_cube.glb', scale: 0.27, position: [0.8, -0.7, 0], holdScatter: 0.01 },
-  { id: 4, name: 'Cone', modelPath: '/models/high_cone.glb', scale: 0.315, position: [0, 0, 0], holdScatter: 0.01 },
-  { id: 5, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.4, position: [0, 0, 0], rotation: [0, 0, 0.122], holdScatter: 0.01 },
-  { id: 6, name: 'Human', scale: 0.35, position: [0, -1.4, 0], holdScatter: 0.006 },  // precomputedPositions는 런타임에 주입
-  { id: 7, name: 'City', modelPath: '/models/san_francisco_city.glb', scale: 1.0, position: [0, -1, 0], particleCount: 50000, heightSize: { min: 0.05, max: 1.0 } },
-  { id: 8, name: 'City2', modelPath: '/models/city_23.glb', scale: 1.0, position: [0, -1, 0], particleCount: 50000, heightSize: { min: 0.05, max: 1.0 } },
-  { id: 9, name: 'City3', modelPath: '/models/city_23_high.glb', scale: 1.0, position: [0, -1, 0], particleCount: 50000, heightSize: { min: 0.05, max: 0.8 } },
+  { id: 0, name: 'Sphere', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [0, 0, 0], holdScatter: 0.015, sectionSpan: 3 },
+  { id: 1, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.4, position: [0, 0, 0], rotation: [0, 0, 0.122], holdScatter: 0.01 },
+  { id: 2, name: 'Human', scale: 0.35, position: [0, -1.4, 0], holdScatter: 0.006 },  // precomputedPositions는 런타임에 주입
+  { id: 3, name: 'City3', modelPath: '/models/city_23_high.glb', scale: 1.0, position: [0, -1, 0], particleCount: 50000, heightSize: { min: 0.05, max: 0.8 } },
 ];
 
 // 파티클 렌더링 모드
@@ -97,14 +92,15 @@ export const particleConfig = {
   showDomeDebug: false,          // 돔 영역 빨간 원 표시
 };
 
-// 스크롤 설정 (6개 모델용)
+// 스크롤 설정 — sectionGap은 1 span 단위의 크기, 총 span 합계로 균등 배분
+// 총 span = Sphere(3) + Gyro(1) + Human(1) + City3(1) = 6
 export const scrollConfig = {
   introEnd: 0,             // 인트로 없음
   sectionStart: 0,         // 첫 모델 즉시 시작
-  sectionGap: 1 / 10,      // 10% 간격 (10개 모델 균등 배분)
-  sectionDuration: 1 / 10, // 10% 지속
+  sectionGap: 1 / 6,       // ~16.7% per span unit
+  sectionDuration: 1 / 6,  // ~16.7% per span unit
   previewOffset: 0,        // 프리뷰 없음
-  modelCount: 10,
+  modelCount: 6,           // 총 span 합계 (deprecated — getPhase에서 span 누적 사용)
 };
 
 // 애니메이션 페이즈 설정 (진입 → 고정 → 퇴장)

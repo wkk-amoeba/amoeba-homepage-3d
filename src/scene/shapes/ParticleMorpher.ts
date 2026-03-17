@@ -73,7 +73,12 @@ export class ParticleMorpher {
   private introGatherTriggered = false;
 
   // Per-shape animation updaters (called each frame before position computation)
-  private shapeUpdaters: Map<number, (delta: number) => void> = new Map();
+  private shapeUpdaters: Map<number, (delta: number, scrollProgress: number) => void> = new Map();
+
+  // Per-shape section spans (from ModelData.sectionSpan, default 1)
+  private modelSpans: number[] = [];
+  // Precomputed cumulative section boundaries [start, end] per shape
+  private sectionBounds: { start: number; end: number }[] = [];
 
   // Ready promise (resolves when all shapes are loaded)
   readonly ready: Promise<void>;
@@ -141,8 +146,13 @@ export class ParticleMorpher {
   }
 
   /** Register a per-frame updater for a shape (e.g., animated FBX walking) */
-  setShapeUpdater(shapeIdx: number, updater: (delta: number) => void) {
+  setShapeUpdater(shapeIdx: number, updater: (delta: number, scrollProgress: number) => void) {
     this.shapeUpdaters.set(shapeIdx, updater);
+  }
+
+  /** Get precomputed section bounds for a shape index */
+  getSectionBounds(shapeIdx: number): { start: number; end: number } | null {
+    return this.sectionBounds[shapeIdx] ?? null;
   }
 
   /** Current effective center in world space (Points.position + shape offset) */
@@ -303,6 +313,17 @@ export class ParticleMorpher {
         heightSize: heightSizeData,
       });
     }
+
+    // Compute per-shape section spans and cumulative bounds
+    this.modelSpans = modelConfigs.map(c => c.sectionSpan ?? 1);
+    const { sectionStart, sectionGap } = scrollConfig;
+    let offset = sectionStart;
+    this.sectionBounds = this.modelSpans.map(span => {
+      const start = offset;
+      const end = offset + span * sectionGap;
+      offset = end;
+      return { start, end };
+    });
 
     // Initialize per-particle arrays
     this.currentPositions = new Float32Array(this.particleCount * 3);
@@ -470,14 +491,15 @@ void main() {`
   // --- Phase calculation ---
 
   private getPhase(scrollProgress: number): MorphPhase {
-    const { sectionStart, sectionGap } = scrollConfig;
     const { enterRatio, holdRatio } = animationPhases;
     const modelCount = this.shapeTargets.length;
-    const sectionDuration = scrollConfig.sectionDuration;
 
     for (let i = 0; i < modelCount; i++) {
-      const secStart = sectionStart + i * sectionGap;
-      const secEnd = secStart + sectionDuration;
+      const bounds = this.sectionBounds[i];
+      if (!bounds) continue;
+      const secStart = bounds.start;
+      const secEnd = bounds.end;
+      const sectionDuration = secEnd - secStart;
 
       if (scrollProgress < secStart || scrollProgress > secEnd + 0.02) continue;
 
@@ -515,6 +537,7 @@ void main() {`
     }
 
     // Fallback: before first or after last
+    const sectionStart = this.sectionBounds[0]?.start ?? 0;
     if (scrollProgress <= sectionStart) return { type: 'hold', shapeIdx: 0 };
     return { type: 'hold', shapeIdx: modelCount - 1 };
   }
@@ -542,7 +565,7 @@ void main() {`
 
     // Call per-shape animation updaters (e.g., walking FBX)
     for (const [, updater] of this.shapeUpdaters) {
-      updater(delta);
+      updater(delta, scrollProgress);
     }
 
     // Sync depth uniforms
