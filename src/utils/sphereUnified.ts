@@ -162,7 +162,7 @@ function computeMetaballOrbital(
       output[i * 3] = nx * tHigh; output[i * 3 + 1] = ny * tHigh; output[i * 3 + 2] = nz * tHigh;
       continue;
     }
-    for (let iter = 0; iter < 6; iter++) {
+    for (let iter = 0; iter < 8; iter++) {
       const tMid = (tLow + tHigh) * 0.5;
       const f = metaballField(nx * tMid, ny * tMid, nz * tMid, mainCx, mainCy, mainCz, mainR2, satCenters, satR2, satCount);
       if (f > threshold) tLow = tMid; else tHigh = tMid;
@@ -245,7 +245,7 @@ function computeMetaballLinearSplit(
       output[i * 3 + 2] = mainCz + nz * tHigh;
       continue;
     }
-    for (let iter = 0; iter < 6; iter++) {
+    for (let iter = 0; iter < 8; iter++) {
       const tMid = (tLow + tHigh) * 0.5;
       const f = metaballField(
         mainCx + nx * tMid, mainCy + ny * tMid, mainCz + nz * tMid,
@@ -280,7 +280,7 @@ function computeMetaballLinearSplit(
         output[i * 3 + 2] = scz + nz * tHigh;
         continue;
       }
-      for (let iter = 0; iter < 6; iter++) {
+      for (let iter = 0; iter < 8; iter++) {
         const tMid = (tLow + tHigh) * 0.5;
         const f = metaballField(
           scx + nx * tMid, scy + ny * tMid, scz + nz * tMid,
