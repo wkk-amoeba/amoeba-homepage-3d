@@ -12,6 +12,7 @@ interface ShapeTarget {
   holdScatter: number;        // hold 상태 scatter 비율 (0=완전 형태, >0=흩어짐)
   heightSize?: { min: number; max: number; yMin: number; yMax: number }; // Y 위치 기반 크기
   radialSize?: { min: number; max: number; maxRadius: number }; // 중심축 거리 기반 크기
+  spinTop?: { tilt: number; spinSpeed: number; precessionSpeed: number; nutationAmp: number; nutationSpeed: number };
 }
 
 interface HoldPhase {
@@ -52,6 +53,10 @@ export class ParticleMorpher {
 
   // Auto-rotation accumulator
   private autoRotateAngle = 0;
+
+  // Per-shape spinTop accumulators
+  private spinAngles: number[] = [];
+  private precessionAngles: number[] = [];
 
   // Shader uniforms
   private depthNearMulUniform = { value: particleConfig.depthNearMul };
@@ -268,8 +273,8 @@ export class ParticleMorpher {
         positions[i] *= finalScale;
       }
 
-      // Apply per-model rotation (e.g., tilting a gyro)
-      if (config.rotation) {
+      // Apply per-model rotation (skip if spinTop handles it dynamically)
+      if (config.rotation && !config.spinTop) {
         const euler = new THREE.Euler(config.rotation[0], config.rotation[1], config.rotation[2]);
         const mat = new THREE.Matrix4().makeRotationFromEuler(euler);
         const v = new THREE.Vector3();
@@ -316,6 +321,18 @@ export class ParticleMorpher {
         radialSizeData = { ...config.radialSize, maxRadius };
       }
 
+      // Store spinTop config (with defaults for optional nutation)
+      let spinTopData: ShapeTarget['spinTop'] = undefined;
+      if (config.spinTop) {
+        spinTopData = {
+          tilt: config.spinTop.tilt,
+          spinSpeed: config.spinTop.spinSpeed,
+          precessionSpeed: config.spinTop.precessionSpeed,
+          nutationAmp: config.spinTop.nutationAmp ?? 0,
+          nutationSpeed: config.spinTop.nutationSpeed ?? 1,
+        };
+      }
+
       const pos = config.position || [0, 0, 0];
       this.shapeTargets.push({
         positions,
@@ -326,6 +343,7 @@ export class ParticleMorpher {
         holdScatter: config.holdScatter || 0,
         heightSize: heightSizeData,
         radialSize: radialSizeData,
+        spinTop: spinTopData,
       });
     }
 
@@ -339,6 +357,10 @@ export class ParticleMorpher {
       offset = end;
       return { start, end };
     });
+
+    // Initialize per-shape spinTop angle accumulators
+    this.spinAngles = this.shapeTargets.map(() => 0);
+    this.precessionAngles = this.shapeTargets.map(() => 0);
 
     // Initialize per-particle arrays
     this.currentPositions = new Float32Array(this.particleCount * 3);
@@ -595,6 +617,15 @@ void main() {`
       this.autoRotateAngle += particleConfig.autoRotateSpeed * delta;
     }
 
+    // Update spinTop angles for all shapes
+    for (let si = 0; si < this.shapeTargets.length; si++) {
+      const st = this.shapeTargets[si].spinTop;
+      if (st) {
+        this.spinAngles[si] += st.spinSpeed * delta;
+        this.precessionAngles[si] += st.precessionSpeed * delta;
+      }
+    }
+
     // Parallax rotation
     const pStr = particleConfig.parallaxStrength;
     if (mouseNorm) {
@@ -796,6 +827,40 @@ void main() {`
 
     this.orbitTime += delta;
 
+    // Precompute spinTop rotation matrix for active shape (Ry(precession) * Rz(tilt) * Ry(spin))
+    let spinTopShapeIdx = -1;
+    let stm00 = 1, stm01 = 0, stm02 = 0;
+    let stm10 = 0, stm11 = 1, stm12 = 0;
+    let stm20 = 0, stm21 = 0, stm22 = 1;
+    if (phase.type === 'hold') {
+      const st = this.shapeTargets[phase.shapeIdx].spinTop;
+      if (st) {
+        spinTopShapeIdx = phase.shapeIdx;
+        const tilt = st.tilt + (st.nutationAmp > 0 ? Math.sin(this.precessionAngles[phase.shapeIdx] * st.nutationSpeed / st.precessionSpeed) * st.nutationAmp : 0);
+        const spinA = this.spinAngles[phase.shapeIdx];
+        const precA = this.precessionAngles[phase.shapeIdx];
+        // Ry(precession)
+        const cp = Math.cos(precA), sp = Math.sin(precA);
+        // Rz(tilt)
+        const ct = Math.cos(tilt), st2 = Math.sin(tilt);
+        // Ry(spin)
+        const cs = Math.cos(spinA), ss = Math.sin(spinA);
+        // Combined: Ry(p) * Rz(t) * Ry(s)
+        // Row 0
+        stm00 = cp * ct * cs - sp * ss;
+        stm01 = -cp * st2;
+        stm02 = cp * ct * ss + sp * cs;
+        // Row 1
+        stm10 = st2 * cs;
+        stm11 = ct;
+        stm12 = st2 * ss;
+        // Row 2
+        stm20 = -sp * ct * cs - cp * ss;
+        stm21 = sp * st2;
+        stm22 = -sp * ct * ss + cp * cs;
+      }
+    }
+
     // --- Per-particle position computation ---
     for (let i = 0; i < this.particleCount; i++) {
       const i3 = i * 3;
@@ -852,6 +917,20 @@ void main() {`
           baseX = cx + rx * cosA - rz * sinA;
           baseZ = rx * sinA + rz * cosA;
         }
+      }
+
+      // SpinTop rotation (팽이: spin + precession + nutation)
+      if (spinTopShapeIdx >= 0) {
+        // Rotate around shape center (local coords, before worldOffset)
+        const cx = effectiveCenter.x;
+        const cy = effectiveCenter.y;
+        const cz = effectiveCenter.z;
+        const lx = baseX - cx;
+        const ly = baseY - cy;
+        const lz = baseZ - cz;
+        baseX = cx + stm00 * lx + stm01 * ly + stm02 * lz;
+        baseY = cy + stm10 * lx + stm11 * ly + stm12 * lz;
+        baseZ = cz + stm20 * lx + stm21 * ly + stm22 * lz;
       }
 
       // Auto-rotation around effective center (Y axis)
