@@ -11,6 +11,7 @@ interface ShapeTarget {
   zMax: number;
   holdScatter: number;        // hold 상태 scatter 비율 (0=완전 형태, >0=흩어짐)
   heightSize?: { min: number; max: number; yMin: number; yMax: number }; // Y 위치 기반 크기
+  radialSize?: { min: number; max: number; maxRadius: number }; // 중심축 거리 기반 크기
 }
 
 interface HoldPhase {
@@ -302,6 +303,19 @@ export class ParticleMorpher {
         heightSizeData = { ...config.heightSize, yMin, yMax };
       }
 
+      // Compute radial bounds (XZ distance from center) for radialSize
+      let radialSizeData: ShapeTarget['radialSize'] = undefined;
+      if (config.radialSize) {
+        let maxRadius = 0;
+        for (let i = 0; i < this.particleCount; i++) {
+          const i3 = i * 3;
+          const x = positions[i3], z = positions[i3 + 2];
+          const r = Math.sqrt(x * x + z * z);
+          if (r > maxRadius) maxRadius = r;
+        }
+        radialSizeData = { ...config.radialSize, maxRadius };
+      }
+
       const pos = config.position || [0, 0, 0];
       this.shapeTargets.push({
         positions,
@@ -311,6 +325,7 @@ export class ParticleMorpher {
         zMax,
         holdScatter: config.holdScatter || 0,
         heightSize: heightSizeData,
+        radialSize: radialSizeData,
       });
     }
 
@@ -709,10 +724,12 @@ void main() {`
     // Compute effective center and depth bounds for shader
     let effectiveCenter: THREE.Vector3;
     let activeHeightSize: ShapeTarget['heightSize'] = undefined;
+    let activeRadialSize: ShapeTarget['radialSize'] = undefined;
     if (phase.type === 'hold') {
       const shape = this.shapeTargets[phase.shapeIdx];
       effectiveCenter = shape.worldOffset;
       activeHeightSize = shape.heightSize;
+      activeRadialSize = shape.radialSize;
       this.localZMinUniform.value = shape.zMin;
       this.localZMaxUniform.value = shape.zMax;
     } else {
@@ -912,6 +929,16 @@ void main() {`
         const clampedY = Math.max(0, Math.min(1, normalizedY));
         const heightMul = activeHeightSize.min + (activeHeightSize.max - activeHeightSize.min) * clampedY;
         sizeMulTarget *= heightMul;
+      }
+
+      // Radial distance-based size effect (중심축에 가까울수록 작게)
+      if (activeRadialSize) {
+        const rx = baseX - effectiveCenter.x;
+        const rz = baseZ - effectiveCenter.z;
+        const radialDist = Math.sqrt(rx * rx + rz * rz);
+        const normalizedR = Math.min(1, radialDist / (activeRadialSize.maxRadius || 1));
+        const radialMul = activeRadialSize.min + (activeRadialSize.max - activeRadialSize.min) * normalizedR;
+        sizeMulTarget *= radialMul;
       }
 
       // Smooth size multiplier

@@ -35,6 +35,7 @@ export interface ModelData {
   particleCount?: number; // 모델별 파티클 수 고정값 (미지정 시 디바이스 기반 자동 결정)
   holdScatter?: number;  // hold 상태에서 유지할 scatter 비율 (0=완전 형태, 1=완전 흩어짐)
   heightSize?: { min: number; max: number }; // Y 위치 기반 파티클 크기 (아래=min, 위=max 배율)
+  radialSize?: { min: number; max: number }; // 중심축 거리 기반 파티클 크기 (중심=min, 외곽=max 배율)
   sectionSpan?: number;  // 이 shape이 차지하는 스크롤 섹션 수 (기본 1)
 }
 
@@ -42,7 +43,7 @@ export interface ModelData {
 // geometry가 있으면 프로그래밍 생성, modelPath가 있으면 GLB .bin 로드 -1.5, 0.3, 0
 export const models: ModelData[] = [
   { id: 0, name: 'Sphere', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [0, 0, 0], holdScatter: 0.015, sectionSpan: 3 },
-  { id: 1, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.4, position: [0, 0, 0], rotation: [0, 0, 0.122], holdScatter: 0.01 },
+  { id: 1, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.4, position: [0, 0, 0], rotation: [0, 0, 0.122], holdScatter: 0.01, radialSize: { min: 0.5, max: 1.0 } },
   { id: 2, name: 'Human', scale: 0.35, position: [0, -1.4, 0], holdScatter: 0.006 },  // precomputedPositions는 런타임에 주입
   { id: 3, name: 'City3', modelPath: '/models/city_23_high.glb', scale: 1.0, position: [0, -1, 0], particleCount: 50000, heightSize: { min: 0.05, max: 0.8 } },
 ];
