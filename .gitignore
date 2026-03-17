@@ -21,6 +21,9 @@
 /build
 /dist
 
+# source 3D models (build-time only, too large for git)
+/models-src/
+
 # misc
 .DS_Store
 *.pem

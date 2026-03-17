@@ -10,6 +10,7 @@ interface ShapeTarget {
   zMin: number;
   zMax: number;
   holdScatter: number;        // hold 상태 scatter 비율 (0=완전 형태, >0=흩어짐)
+  heightSize?: { min: number; max: number; yMin: number; yMax: number }; // Y 위치 기반 크기
 }
 
 interface HoldPhase {
@@ -279,6 +280,18 @@ export class ParticleMorpher {
         if (z > zMax) zMax = z;
       }
 
+      // Compute Y bounds (after normalization+rotation) for heightSize
+      let heightSizeData: ShapeTarget['heightSize'] = undefined;
+      if (config.heightSize) {
+        let yMin = Infinity, yMax = -Infinity;
+        for (let i = 0; i < this.particleCount; i++) {
+          const y = positions[i * 3 + 1];
+          if (y < yMin) yMin = y;
+          if (y > yMax) yMax = y;
+        }
+        heightSizeData = { ...config.heightSize, yMin, yMax };
+      }
+
       const pos = config.position || [0, 0, 0];
       this.shapeTargets.push({
         positions,
@@ -287,6 +300,7 @@ export class ParticleMorpher {
         zMin,
         zMax,
         holdScatter: config.holdScatter || 0,
+        heightSize: heightSizeData,
       });
     }
 
@@ -671,9 +685,11 @@ void main() {`
 
     // Compute effective center and depth bounds for shader
     let effectiveCenter: THREE.Vector3;
+    let activeHeightSize: ShapeTarget['heightSize'] = undefined;
     if (phase.type === 'hold') {
       const shape = this.shapeTargets[phase.shapeIdx];
       effectiveCenter = shape.worldOffset;
+      activeHeightSize = shape.heightSize;
       this.localZMinUniform.value = shape.zMin;
       this.localZMaxUniform.value = shape.zMax;
     } else {
@@ -864,6 +880,15 @@ void main() {`
             sizeMulTarget = 1.0 + dome * particleConfig.mouseSizeStrength * sizeFactor;
           }
         }
+      }
+
+      // Height-based size effect
+      if (activeHeightSize) {
+        const y = baseY - effectiveCenter.y; // local Y (relative to shape center)
+        const normalizedY = (y - activeHeightSize.yMin) / (activeHeightSize.yMax - activeHeightSize.yMin || 1);
+        const clampedY = Math.max(0, Math.min(1, normalizedY));
+        const heightMul = activeHeightSize.min + (activeHeightSize.max - activeHeightSize.min) * clampedY;
+        sizeMulTarget *= heightMul;
       }
 
       // Smooth size multiplier
