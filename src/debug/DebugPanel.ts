@@ -1,6 +1,7 @@
 import GUI from 'lil-gui';
 import { SceneManager } from '../scene/SceneManager';
 import { particleConfig, backgroundConfig, animationPhases } from '../config/sceneConfig';
+import { getActiveSphereDeformConfig } from '../utils/sphereDeform';
 
 export class DebugPanel {
   private gui: GUI;
@@ -286,6 +287,20 @@ export class DebugPanel {
         .add(params, 'holdScatter', 0, 0.1, 0.001)
         .name('Hold Scatter')
         .onChange((v: number) => { shape.holdScatter = v; });
+
+      // Sphere deform controls
+      const sphereDeformCfg = shape.name === 'Sphere' ? getActiveSphereDeformConfig() : null;
+      if (sphereDeformCfg) {
+        const deformFolder = folder.addFolder('Deform');
+        const cfg = sphereDeformCfg;
+        deformFolder.add(cfg, 'maxDeform', 0, 1.0, 0.01).name('Max Deform');
+        deformFolder.add(cfg, 'noiseScale', 0.5, 8.0, 0.1).name('Noise Scale');
+        deformFolder.add(cfg, 'breathSpeed', 0.05, 2.0, 0.05).name('Breath Speed');
+        deformFolder.add(cfg, 'breathMin', 0, 1.0, 0.05).name('Breath Min');
+        deformFolder.add(cfg, 'breathMax', 0, 1.0, 0.05).name('Breath Max');
+        deformFolder.add(cfg, 'noiseSpeed', 0, 1.0, 0.01).name('Noise Speed');
+        deformFolder.open();
+      }
 
       folder.open();
     });
