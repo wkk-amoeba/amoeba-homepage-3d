@@ -41,13 +41,15 @@ export interface ModelData {
 // geometry가 있으면 프로그래밍 생성, modelPath가 있으면 GLB .bin 로드 -1.5, 0.3, 0
 export const models: ModelData[] = [
   { id: 0, name: 'Sphere', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [0, 0, 0], holdScatter: 0.015 },
-  { id: 1, name: 'Box', modelPath: '/models/high_cube.glb', scale: 0.27, position: [0.8, -0.7, 0], holdScatter: 0.01 },
-  { id: 2, name: 'Cone', modelPath: '/models/high_cone.glb', scale: 0.315, position: [0, 0, 0], holdScatter: 0.01 },
-  { id: 3, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.4, position: [0, 0, 0], rotation: [0, 0, 0.122], holdScatter: 0.01 },
-  { id: 4, name: 'Human', scale: 0.35, position: [0, -1.4, 0], holdScatter: 0.006 },  // precomputedPositions는 런타임에 주입
-  { id: 5, name: 'City', modelPath: '/models/san_francisco_city.glb', scale: 1.0, position: [0, -1, 0], particleCount: 50000, heightSize: { min: 0.05, max: 1.0 } },
-  { id: 6, name: 'City2', modelPath: '/models/city_23.glb', scale: 1.0, position: [0, -1, 0], particleCount: 50000, heightSize: { min: 0.05, max: 1.0 } },
-  { id: 7, name: 'City3', modelPath: '/models/city_23_high.glb', scale: 1.0, position: [0, -1, 0], particleCount: 50000, heightSize: { min: 0.05, max: 0.8 } },
+  { id: 1, name: 'Sphere2', modelPath: '/models/high_shpere.glb', scale: 0.25, position: [0, 0, 0], holdScatter: 0.015 },
+  { id: 2, name: 'Sphere3', modelPath: '/models/high_shpere.glb', scale: 0.25, position: [0, 0, 0], holdScatter: 0.001 },
+  { id: 3, name: 'Box', modelPath: '/models/high_cube.glb', scale: 0.27, position: [0.8, -0.7, 0], holdScatter: 0.01 },
+  { id: 4, name: 'Cone', modelPath: '/models/high_cone.glb', scale: 0.315, position: [0, 0, 0], holdScatter: 0.01 },
+  { id: 5, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.4, position: [0, 0, 0], rotation: [0, 0, 0.122], holdScatter: 0.01 },
+  { id: 6, name: 'Human', scale: 0.35, position: [0, -1.4, 0], holdScatter: 0.006 },  // precomputedPositions는 런타임에 주입
+  { id: 7, name: 'City', modelPath: '/models/san_francisco_city.glb', scale: 1.0, position: [0, -1, 0], particleCount: 50000, heightSize: { min: 0.05, max: 1.0 } },
+  { id: 8, name: 'City2', modelPath: '/models/city_23.glb', scale: 1.0, position: [0, -1, 0], particleCount: 50000, heightSize: { min: 0.05, max: 1.0 } },
+  { id: 9, name: 'City3', modelPath: '/models/city_23_high.glb', scale: 1.0, position: [0, -1, 0], particleCount: 50000, heightSize: { min: 0.05, max: 0.8 } },
 ];
 
 // 파티클 렌더링 모드
@@ -99,10 +101,10 @@ export const particleConfig = {
 export const scrollConfig = {
   introEnd: 0,             // 인트로 없음
   sectionStart: 0,         // 첫 모델 즉시 시작
-  sectionGap: 1 / 8,       // 12.5% 간격 (8개 모델 균등 배분)
-  sectionDuration: 1 / 8,  // 12.5% 지속
+  sectionGap: 1 / 10,      // 10% 간격 (10개 모델 균등 배분)
+  sectionDuration: 1 / 10, // 10% 지속
   previewOffset: 0,        // 프리뷰 없음
-  modelCount: 8,
+  modelCount: 10,
 };
 
 // 애니메이션 페이즈 설정 (진입 → 고정 → 퇴장)

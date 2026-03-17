@@ -3,6 +3,7 @@ import { SceneManager } from './scene/SceneManager';
 import { models } from './config/sceneConfig';
 import { loadFBXWalking, registerWalkingUpdater } from './utils/fbxWalking';
 import { registerSphereDeform } from './utils/sphereDeform';
+import { registerSphereMetaball, registerSphereMetaballLinear } from './utils/sphereMetaball';
 
 // Main
 document.addEventListener('DOMContentLoaded', async () => {
@@ -30,11 +31,12 @@ document.addEventListener('DOMContentLoaded', async () => {
       registerWalkingUpdater(morpher, humanIdx, walkData, humanModel.scale);
     }
 
-    // Sphere deformation (crumple breathing)
-    const sphereIdx = models.findIndex((m) => m.name === 'Sphere');
-    if (sphereIdx >= 0) {
-      registerSphereDeform(morpher, sphereIdx);
-    }
+    // Sphere deformation (crumple breathing) & metaball
+    models.forEach((m, idx) => {
+      if (m.name === 'Sphere') registerSphereDeform(morpher, idx);
+      if (m.name === 'Sphere2') registerSphereMetaball(morpher, idx);
+      if (m.name === 'Sphere3') registerSphereMetaballLinear(morpher, idx);
+    });
   }
 
   // Always show debug panel in experiment page

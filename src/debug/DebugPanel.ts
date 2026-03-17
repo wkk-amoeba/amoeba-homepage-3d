@@ -2,6 +2,7 @@ import GUI from 'lil-gui';
 import { SceneManager } from '../scene/SceneManager';
 import { particleConfig, backgroundConfig, animationPhases } from '../config/sceneConfig';
 import { getActiveSphereDeformConfig } from '../utils/sphereDeform';
+import { getActiveMetaballConfig, getActiveLinearConfig } from '../utils/sphereMetaball';
 
 export class DebugPanel {
   private gui: GUI;
@@ -300,6 +301,36 @@ export class DebugPanel {
         deformFolder.add(cfg, 'breathMax', 0, 1.0, 0.05).name('Breath Max');
         deformFolder.add(cfg, 'noiseSpeed', 0, 1.0, 0.01).name('Noise Speed');
         deformFolder.open();
+      }
+
+      // Sphere2 metaball controls (orbital)
+      const metaballCfg = shape.name === 'Sphere2' ? getActiveMetaballConfig() : null;
+      if (metaballCfg) {
+        const mbFolder = folder.addFolder('Metaball');
+        mbFolder.add(metaballCfg, 'mainRadius', 0.5, 3.0, 0.05).name('Main Radius');
+        mbFolder.add(metaballCfg, 'bobAmplitude', 0, 1.0, 0.05).name('Bob Amplitude');
+        mbFolder.add(metaballCfg, 'bobSpeed', 0.1, 3.0, 0.1).name('Bob Speed');
+        mbFolder.add(metaballCfg, 'satelliteCount', 1, 8, 1).name('Satellites');
+        mbFolder.add(metaballCfg, 'satelliteRadius', 0.1, 1.5, 0.05).name('Sat Radius');
+        mbFolder.add(metaballCfg, 'orbitRadius', 0.5, 4.0, 0.1).name('Orbit Radius');
+        mbFolder.add(metaballCfg, 'orbitSpeed', 0.1, 3.0, 0.1).name('Orbit Speed');
+        mbFolder.add(metaballCfg, 'threshold', 0.5, 2.0, 0.05).name('Threshold');
+        mbFolder.open();
+      }
+
+      // Sphere3 metaball controls (linear reciprocating)
+      const linearCfg = shape.name === 'Sphere3' ? getActiveLinearConfig() : null;
+      if (linearCfg) {
+        const lnFolder = folder.addFolder('Metaball Linear');
+        lnFolder.add(linearCfg, 'mainRadius', 0.5, 3.0, 0.05).name('Main Radius');
+        lnFolder.add(linearCfg, 'bobAmplitude', 0, 1.0, 0.05).name('Bob Amplitude');
+        lnFolder.add(linearCfg, 'bobSpeed', 0.1, 3.0, 0.1).name('Bob Speed');
+        lnFolder.add(linearCfg, 'satelliteCount', 1, 8, 1).name('Satellites');
+        lnFolder.add(linearCfg, 'satelliteRadius', 0.1, 1.5, 0.05).name('Sat Radius');
+        lnFolder.add(linearCfg, 'travelDistance', 0.5, 5.0, 0.1).name('Travel Dist');
+        lnFolder.add(linearCfg, 'travelSpeed', 0.1, 3.0, 0.1).name('Travel Speed');
+        lnFolder.add(linearCfg, 'threshold', 0.5, 2.0, 0.05).name('Threshold');
+        lnFolder.open();
       }
 
       folder.open();
