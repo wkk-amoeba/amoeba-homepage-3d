@@ -30,11 +30,12 @@ export interface ModelData {
   geometry?: string;             // 프로그래밍 도형 ('sphere' | 'box' | 'tetrahedron' 등)
   precomputedPositions?: Float32Array; // 사전 계산된 버텍스 위치 (런타임 주입용)
   scale: number;
+  mobileScale?: number;                // 모바일 전용 스케일 (미지정 시 scale 사용)
   position?: [number, number, number]; // 월드 위치 오프셋 [x, y, z] (Points 중심 기준)
   rotation?: [number, number, number]; // 기본 회전 [x, y, z] (라디안)
   particleCount?: number; // 모델별 파티클 수 고정값 (미지정 시 디바이스 기반 자동 결정)
   holdScatter?: number;  // hold 상태에서 유지할 scatter 비율 (0=완전 형태, 1=완전 흩어짐)
-  heightSize?: { min: number; max: number }; // Y 위치 기반 파티클 크기 (아래=min, 위=max 배율)
+  heightSize?: { min: number; max: number; mobileMin?: number }; // Y 위치 기반 파티클 크기 (아래=min, 위=max 배율, mobileMin: 모바일 전용 min)
   radialSize?: { min: number; max: number }; // 중심축 거리 기반 파티클 크기 (중심=min, 외곽=max 배율)
   spinTop?: {              // 팽이 효과 (rotation 대신 동적 회전)
     tilt: number;            // 기울기 (라디안)
@@ -61,7 +62,7 @@ export const models: ModelData[] = [
   { id: 0, name: 'Sphere', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [0, 0, 0], holdScatter: 0.015, sectionSpan: 3 },
   { id: 1, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.4, position: [0, 0, 0], holdScatter: 0.01, radialSize: { min: 0.5, max: 1.0 }, spinTop: { tilt: 0, spinSpeed: 0.3, precessionSpeed: 0.4, nutationAmp: 0.122, nutationSpeed: 1.5 } },
   { id: 2, name: 'Human', scale: 0.35, position: [0, -1.4, 0], holdScatter: 0.006 },  // precomputedPositions는 런타임에 주입
-  { id: 3, name: 'City3', modelPath: '/models/city_23_high.glb', scale: 1.0, position: [0, -1, 0], particleCount: 50000, heightSize: { min: 0.05, max: 0.8 }, autoRotateSpeed: -0.3, enterTransition: { noRotation: true, gravity: true, gravityHeight: 3.5, gravityDuration: 5.0, gravityWobbleFreq: 10.0, scatterScale: 0.08 } },
+  { id: 3, name: 'City3', modelPath: '/models/city_23_high.glb', scale: 1.0, mobileScale: 0.85, position: [0, -1, 0], particleCount: 50000, heightSize: { min: 0.05, max: 0.8, mobileMin: 0.2 }, autoRotateSpeed: -0.3, enterTransition: { noRotation: true, gravity: true, gravityHeight: 3.5, gravityDuration: 5.0, gravityWobbleFreq: 10.0, scatterScale: 0.08 } },
 ];
 
 // 파티클 렌더링 모드

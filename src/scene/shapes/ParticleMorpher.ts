@@ -10,7 +10,7 @@ interface ShapeTarget {
   zMin: number;
   zMax: number;
   holdScatter: number;        // hold 상태 scatter 비율 (0=완전 형태, >0=흩어짐)
-  heightSize?: { min: number; max: number; yMin: number; yMax: number }; // Y 위치 기반 크기
+  heightSize?: { min: number; max: number; mobileMin?: number; yMin: number; yMax: number }; // Y 위치 기반 크기
   radialSize?: { min: number; max: number; maxRadius: number }; // 중심축 거리 기반 크기
   spinTop?: { tilt: number; spinSpeed: number; precessionSpeed: number; nutationAmp: number; nutationSpeed: number };
   autoRotateSpeed?: number; // 모델별 자전 속도 오버라이드
@@ -279,7 +279,9 @@ export class ParticleMorpher {
       const maxDimension = Math.max(sizeX, sizeY, sizeZ);
       const targetSize = 8;
       const normalizeScale = targetSize / maxDimension;
-      const finalScale = normalizeScale * config.scale;
+      const isMobile = window.innerWidth < 768;
+      const effectiveScale = (isMobile && config.mobileScale !== undefined) ? config.mobileScale : config.scale;
+      const finalScale = normalizeScale * effectiveScale;
 
       for (let i = 0; i < positions.length; i++) {
         positions[i] *= finalScale;
@@ -1091,7 +1093,9 @@ void main() {`
         const y = baseY - effectiveCenter.y; // local Y (relative to shape center)
         const normalizedY = (y - activeHeightSize.yMin) / (activeHeightSize.yMax - activeHeightSize.yMin || 1);
         const clampedY = Math.max(0, Math.min(1, normalizedY));
-        const heightMul = activeHeightSize.min + (activeHeightSize.max - activeHeightSize.min) * clampedY;
+        const isMobile = window.innerWidth < 768;
+        const minVal = (isMobile && activeHeightSize.mobileMin !== undefined) ? activeHeightSize.mobileMin : activeHeightSize.min;
+        const heightMul = minVal + (activeHeightSize.max - minVal) * clampedY;
         sizeMulTarget *= heightMul;
       }
 

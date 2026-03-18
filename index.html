@@ -13,40 +13,40 @@
   <div id="canvas-container" class="fixed inset-0 -z-10"></div>
 
   <!-- Fixed text overlays (화면 중앙 고정, fade in/out) -->
-  <div class="shape-section fixed inset-0 z-10 flex items-center justify-center pointer-events-none" data-index="0" data-sub-boundary="0.5">
-    <div class="shape-content text-center opacity-0" data-sub="0">
-      <div class="mb-4 inline-block rounded-full px-4 py-2 text-sm font-medium bg-white/10 text-white/80">01</div>
-      <h2 class="mb-4 text-5xl font-bold md:text-7xl">원</h2>
-      <p class="max-w-md text-xl text-white/70">완벽한 대칭의 구</p>
+  <div class="shape-section fixed inset-0 z-10 flex items-center justify-center pointer-events-none px-4" data-index="0" data-sub-boundary="0.5">
+    <div class="shape-content text-center opacity-0 absolute w-full max-w-md" data-sub="0">
+      <div class="mb-3 md:mb-4 inline-block rounded-full px-4 py-2 text-xs md:text-sm font-medium bg-white/10 text-white/80">01</div>
+      <h2 class="mb-3 md:mb-4 text-3xl font-bold sm:text-5xl md:text-7xl">원</h2>
+      <p class="text-base md:text-xl text-white/70">완벽한 대칭의 구</p>
     </div>
-    <div class="shape-content text-center opacity-0" data-sub="1">
-      <div class="mb-4 inline-block rounded-full px-4 py-2 text-sm font-medium bg-white/10 text-white/80">02</div>
-      <h2 class="mb-4 text-5xl font-bold md:text-7xl">위성</h2>
-      <p class="max-w-md text-xl text-white/70">궤도를 도는 위성</p>
-    </div>
-  </div>
-
-  <div class="shape-section fixed inset-0 z-10 flex items-center justify-center pointer-events-none" data-index="1">
-    <div class="shape-content text-center opacity-0">
-      <div class="mb-4 inline-block rounded-full px-4 py-2 text-sm font-medium bg-white/10 text-white/80">03</div>
-      <h2 class="mb-4 text-5xl font-bold md:text-7xl">Gyro</h2>
-      <p class="max-w-md text-xl text-white/70">회전하는 자이로</p>
+    <div class="shape-content text-center opacity-0 absolute w-full max-w-md" data-sub="1">
+      <div class="mb-3 md:mb-4 inline-block rounded-full px-4 py-2 text-xs md:text-sm font-medium bg-white/10 text-white/80">02</div>
+      <h2 class="mb-3 md:mb-4 text-3xl font-bold sm:text-5xl md:text-7xl">위성</h2>
+      <p class="text-base md:text-xl text-white/70">궤도를 도는 위성</p>
     </div>
   </div>
 
-  <div class="shape-section fixed inset-0 z-10 flex items-center justify-center pointer-events-none" data-index="2">
-    <div class="shape-content text-center opacity-0">
-      <div class="mb-4 inline-block rounded-full px-4 py-2 text-sm font-medium bg-white/10 text-white/80">04</div>
-      <h2 class="mb-4 text-5xl font-bold md:text-7xl">Human</h2>
-      <p class="max-w-md text-xl text-white/70">걷는 사람</p>
+  <div class="shape-section fixed inset-0 z-10 flex items-center justify-center pointer-events-none px-4" data-index="1">
+    <div class="shape-content text-center opacity-0 absolute w-full max-w-md">
+      <div class="mb-3 md:mb-4 inline-block rounded-full px-4 py-2 text-xs md:text-sm font-medium bg-white/10 text-white/80">03</div>
+      <h2 class="mb-3 md:mb-4 text-3xl font-bold sm:text-5xl md:text-7xl">Gyro</h2>
+      <p class="text-base md:text-xl text-white/70">회전하는 자이로</p>
     </div>
   </div>
 
-  <div class="shape-section fixed inset-0 z-10 flex items-center justify-center pointer-events-none" data-index="3">
-    <div class="shape-content text-center opacity-0">
-      <div class="mb-4 inline-block rounded-full px-4 py-2 text-sm font-medium bg-white/10 text-white/80">05</div>
-      <h2 class="mb-4 text-5xl font-bold md:text-7xl">City 3</h2>
-      <p class="max-w-md text-xl text-white/70">도시의 스카이라인</p>
+  <div class="shape-section fixed inset-0 z-10 flex items-center justify-center pointer-events-none px-4" data-index="2">
+    <div class="shape-content text-center opacity-0 absolute w-full max-w-md">
+      <div class="mb-3 md:mb-4 inline-block rounded-full px-4 py-2 text-xs md:text-sm font-medium bg-white/10 text-white/80">04</div>
+      <h2 class="mb-3 md:mb-4 text-3xl font-bold sm:text-5xl md:text-7xl">Human</h2>
+      <p class="text-base md:text-xl text-white/70">걷는 사람</p>
+    </div>
+  </div>
+
+  <div class="shape-section fixed inset-0 z-10 flex items-center justify-center pointer-events-none px-4" data-index="3">
+    <div class="shape-content text-center opacity-0 absolute w-full max-w-md">
+      <div class="mb-3 md:mb-4 inline-block rounded-full px-4 py-2 text-xs md:text-sm font-medium bg-white/10 text-white/80">05</div>
+      <h2 class="mb-3 md:mb-4 text-3xl font-bold sm:text-5xl md:text-7xl">City 3</h2>
+      <p class="text-base md:text-xl text-white/70">도시의 스카이라인</p>
     </div>
   </div>
 
@@ -54,8 +54,8 @@
   <div id="content" style="height: 1100vh;"></div>
 
 
-  <!-- Scroll Progress Indicator -->
-  <div id="scroll-indicator" class="fixed bottom-8 right-8 z-50 flex flex-col items-center gap-2">
+  <!-- Scroll Progress Indicator (숨김) -->
+  <div id="scroll-indicator" class="hidden">
     <div class="h-32 w-1 overflow-hidden rounded-full bg-white/20">
       <div id="scroll-bar" class="w-full rounded-full bg-white transition-all duration-150" style="height: 0%"></div>
     </div>
