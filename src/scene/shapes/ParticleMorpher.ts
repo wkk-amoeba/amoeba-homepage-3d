@@ -13,6 +13,8 @@ interface ShapeTarget {
   heightSize?: { min: number; max: number; yMin: number; yMax: number }; // Y 위치 기반 크기
   radialSize?: { min: number; max: number; maxRadius: number }; // 중심축 거리 기반 크기
   spinTop?: { tilt: number; spinSpeed: number; precessionSpeed: number; nutationAmp: number; nutationSpeed: number };
+  autoRotateSpeed?: number; // 모델별 자전 속도 오버라이드
+  enterTransition?: { noRotation?: boolean; gravity?: boolean; gravityHeight?: number; gravityDuration?: number; gravityWobbleFreq?: number; scatterScale?: number };
 }
 
 interface HoldPhase {
@@ -57,6 +59,11 @@ export class ParticleMorpher {
   // Per-shape spinTop accumulators
   private spinAngles: number[] = [];
   private precessionAngles: number[] = [];
+
+  // Gravity settle state
+  private gravitySettleTime = 0;       // 중력 낙하 경과 시간
+  private gravityActiveShapeIdx = -1;  // 현재 중력 활성 shape index
+  private gravityTriggered = false;    // hold 진입 후 중력 시작 여부
 
   // Shader uniforms
   private depthNearMulUniform = { value: particleConfig.depthNearMul };
@@ -107,6 +114,11 @@ export class ParticleMorpher {
 
   get totalParticleCount(): number {
     return this.particleCount;
+  }
+
+  resetGravitySettle() {
+    this.gravitySettleTime = 0;
+    this.gravityTriggered = true;
   }
 
   get userScale(): number {
@@ -344,6 +356,8 @@ export class ParticleMorpher {
         heightSize: heightSizeData,
         radialSize: radialSizeData,
         spinTop: spinTopData,
+        autoRotateSpeed: config.autoRotateSpeed,
+        enterTransition: config.enterTransition,
       });
     }
 
@@ -612,9 +626,20 @@ void main() {`
     // Update scale
     this.points.scale.setScalar(this._userScale);
 
-    // Auto-rotation (slow continuous Y-axis spin)
-    if (particleConfig.autoRotateSpeed !== 0) {
-      this.autoRotateAngle += particleConfig.autoRotateSpeed * delta;
+    // Auto-rotation (slow continuous Y-axis spin, per-model override)
+    {
+      const phase = this.getPhase(scrollProgress);
+      let rotSpeed = particleConfig.autoRotateSpeed;
+      if (phase.type === 'hold') {
+        const shapeSpeed = this.shapeTargets[phase.shapeIdx]?.autoRotateSpeed;
+        if (shapeSpeed !== undefined) rotSpeed = shapeSpeed;
+      } else if (phase.type === 'transition') {
+        const shapeSpeed = this.shapeTargets[phase.toIdx]?.autoRotateSpeed;
+        if (shapeSpeed !== undefined) rotSpeed = shapeSpeed;
+      }
+      if (rotSpeed !== 0) {
+        this.autoRotateAngle += rotSpeed * delta;
+      }
     }
 
     // Update spinTop angles for all shapes
@@ -861,6 +886,32 @@ void main() {`
       }
     }
 
+    // --- Gravity settle timer update ---
+    if (phase.type === 'hold') {
+      const shape = this.shapeTargets[phase.shapeIdx];
+      if (shape.enterTransition?.gravity) {
+        if (this.gravityActiveShapeIdx !== phase.shapeIdx) {
+          // Just entered hold for this gravity shape — start settling
+          this.gravityActiveShapeIdx = phase.shapeIdx;
+          this.gravitySettleTime = 0;
+          this.gravityTriggered = true;
+        }
+        if (this.gravityTriggered) {
+          this.gravitySettleTime += delta;
+        }
+      } else {
+        this.gravityTriggered = false;
+        this.gravityActiveShapeIdx = -1;
+      }
+    } else if (phase.type === 'transition') {
+      const to = this.shapeTargets[phase.toIdx];
+      if (to.enterTransition?.gravity) {
+        // During transition to gravity shape — keep timer reset
+        this.gravityActiveShapeIdx = -1;
+        this.gravityTriggered = false;
+      }
+    }
+
     // --- Per-particle position computation ---
     for (let i = 0; i < this.particleCount; i++) {
       const i3 = i * 3;
@@ -879,10 +930,36 @@ void main() {`
           baseY += this.scatterOffsets[i3 + 1] * shape.holdScatter;
           baseZ += this.scatterOffsets[i3 + 2] * shape.holdScatter;
         }
+        // Gravity settle: particles fall from above into position over time
+        if (this.gravityTriggered && this.gravityActiveShapeIdx === phase.shapeIdx) {
+          const enterTr = shape.enterTransition!;
+          const gravH = enterTr.gravityHeight ?? 8;
+          const settleDuration = enterTr.gravityDuration ?? 3.0;
+          // Per-particle stagger: scatter offset으로 각 파티클 낙하 시작 시간 다르게
+          const stagger = (this.scatterOffsets[i3] * 0.5 + 0.5) * 1.5; // 0~1.5초 지연
+          const particleTime = Math.max(0, this.gravitySettleTime - stagger);
+          const fallT = Math.min(1, particleTime / settleDuration);
+          // easeInQuad: 처음엔 천천히, 점점 가속 (자유낙하 느낌)
+          const fallProgress = fallT * fallT;
+          const yOffset = gravH * (1 - fallProgress);
+          baseY += yOffset;
+          // 낙하 중 흔들림 (감쇠 진동): 떨어지면서 XZ로 살짝 흔들리다 착지 시 멈춤
+          if (fallT < 1) {
+            const wobbleDecay = 1 - fallT; // 착지에 가까울수록 감소
+            const wobbleFreq = enterTr.gravityWobbleFreq ?? 4.0;
+            const wobbleAmp = 0.3 * wobbleDecay; // 최대 흔들림 반경
+            // 파티클마다 다른 위상으로 흔들리도록 scatter offset 활용
+            const phase1 = this.scatterOffsets[i3 + 1] * Math.PI * 2;
+            const phase2 = this.scatterOffsets[i3 + 2] * Math.PI * 2;
+            baseX += Math.sin(particleTime * wobbleFreq + phase1) * wobbleAmp;
+            baseZ += Math.cos(particleTime * wobbleFreq + phase2) * wobbleAmp;
+          }
+        }
       } else {
         const from = this.shapeTargets[phase.fromIdx];
         const to = this.shapeTargets[phase.toIdx];
         const t = this.smoothstep(phase.t);
+        const enterTr = to.enterTransition;
 
         const fhs = from.holdScatter;
         const ths = to.holdScatter;
@@ -898,15 +975,23 @@ void main() {`
         const lerpY = fromY + (toY - fromY) * t;
         const lerpZ = fromZ + (toZ - fromZ) * t;
 
-        // Scatter peaks at midpoint of transition
-        const scatterAmount = Math.sin(phase.t * Math.PI) * particleConfig.scatterScale;
+        // Scatter: per-model override or default
+        const scatterScaleVal = enterTr?.scatterScale ?? particleConfig.scatterScale;
+        const scatterAmount = Math.sin(phase.t * Math.PI) * scatterScaleVal;
 
         baseX = lerpX + this.scatterOffsets[i3] * scatterAmount;
         baseY = lerpY + this.scatterOffsets[i3 + 1] * scatterAmount;
         baseZ = lerpZ + this.scatterOffsets[i3 + 2] * scatterAmount;
 
-        // Rotation around effective center during transition
-        if (particleConfig.transitionRotation) {
+        // Gravity: during transition, lift particles to gravityHeight (fall happens in hold)
+        if (enterTr?.gravity) {
+          const gravH = enterTr.gravityHeight ?? 8;
+          // 전환 후반(t→1)에서 파티클이 높이 위치하도록
+          baseY += gravH * t;
+        }
+
+        // Rotation around effective center during transition (skip if noRotation)
+        if (particleConfig.transitionRotation && !enterTr?.noRotation) {
           const cx = effectiveCenter.x;
           // Rotate around Y axis (relative to effective center)
           const angle = phase.t * particleConfig.transitionRotationSpeed * Math.PI * 2;

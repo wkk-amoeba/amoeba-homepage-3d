@@ -374,7 +374,7 @@ export function registerUnifiedSphere(
     subSection2: 0.4,     // orbital ends at 40% → orbital2 holds 60%
     deformHoldScatter: 0.015,
     orbitalHoldScatter: 0.015,
-    orbital2HoldScatter: 0.015,
+    orbital2HoldScatter: 0.001,
   };
 
   const positions = shape.positions;

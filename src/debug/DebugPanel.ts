@@ -293,6 +293,11 @@ export class DebugPanel {
           .name('Hold Scatter')
           .onChange((v: number) => { shape.holdScatter = v; });
       }
+      if (shape.autoRotateSpeed !== undefined) {
+        folder
+          .add(shape, 'autoRotateSpeed', 0, 1.0, 0.01)
+          .name('Auto Rotate Speed');
+      }
       if (unifiedCfg) {
         folder.add(unifiedCfg, 'transitionWidth', 0, 0.3, 0.01).name('Transition Width');
         folder.add(unifiedCfg, 'subSection1', 0.05, 0.5, 0.05).name('Sub1 (Deform→Orb)');
@@ -332,6 +337,16 @@ export class DebugPanel {
         o2Folder.add(o2, 'travelDistance', 0.5, 5.0, 0.1).name('Travel Dist');
         o2Folder.add(o2, 'travelSpeed', 0.1, 3.0, 0.1).name('Travel Speed');
         o2Folder.add(o2, 'threshold', 0.5, 2.0, 0.05).name('Threshold');
+      }
+
+      // Gravity fall controls
+      if (shape.enterTransition?.gravity) {
+        const gravFolder = folder.addFolder('Gravity Fall');
+        const et = shape.enterTransition;
+        gravFolder.add(et, 'gravityHeight', 1, 20, 0.5).name('Height');
+        gravFolder.add(et, 'gravityDuration', 0.5, 10, 0.1).name('Duration (s)');
+        gravFolder.add(et, 'gravityWobbleFreq', 0, 12, 0.5).name('Wobble Freq');
+        gravFolder.add({ replay: () => { morpher.resetGravitySettle(); } }, 'replay').name('▶ Replay');
       }
 
       folder.open();

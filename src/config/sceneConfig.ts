@@ -44,6 +44,15 @@ export interface ModelData {
     nutationSpeed?: number;  // 장동 속도 (rad/s)
   };
   sectionSpan?: number;  // 이 shape이 차지하는 스크롤 섹션 수 (기본 1)
+  autoRotateSpeed?: number; // 모델별 자전 속도 오버라이드 (rad/s, 미지정 시 particleConfig.autoRotateSpeed 사용)
+  enterTransition?: {        // 이 모델로 진입할 때의 전환 효과 커스텀
+    noRotation?: boolean;      // 전환 시 회전 비활성 (기본 false)
+    gravity?: boolean;         // 중력 낙하 효과 (기본 false)
+    gravityHeight?: number;    // 낙하 시작 높이 오프셋 (기본 8)
+    gravityDuration?: number;  // 낙하 재생 시간 (초, 기본 3.0)
+    gravityWobbleFreq?: number; // 낙하 흔들림 진동 주파수 (Hz, 기본 4.0)
+    scatterScale?: number;     // scatter 배율 오버라이드 (기본 particleConfig.scatterScale)
+  };
 }
 
 // 3D 모델 정의
@@ -52,7 +61,7 @@ export const models: ModelData[] = [
   { id: 0, name: 'Sphere', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [0, 0, 0], holdScatter: 0.015, sectionSpan: 3 },
   { id: 1, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.4, position: [0, 0, 0], holdScatter: 0.01, radialSize: { min: 0.5, max: 1.0 }, spinTop: { tilt: 0, spinSpeed: 0.3, precessionSpeed: 0.4, nutationAmp: 0.122, nutationSpeed: 1.5 } },
   { id: 2, name: 'Human', scale: 0.35, position: [0, -1.4, 0], holdScatter: 0.006 },  // precomputedPositions는 런타임에 주입
-  { id: 3, name: 'City3', modelPath: '/models/city_23_high.glb', scale: 1.0, position: [0, -1, 0], particleCount: 50000, heightSize: { min: 0.05, max: 0.8 } },
+  { id: 3, name: 'City3', modelPath: '/models/city_23_high.glb', scale: 1.0, position: [0, -1, 0], particleCount: 50000, heightSize: { min: 0.05, max: 0.8 }, autoRotateSpeed: -0.3, enterTransition: { noRotation: true, gravity: true, gravityHeight: 3.5, gravityDuration: 5.0, gravityWobbleFreq: 10.0, scatterScale: 0.08 } },
 ];
 
 // 파티클 렌더링 모드
