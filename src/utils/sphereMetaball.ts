@@ -372,11 +372,8 @@ export function registerSphereMetaballLinear(
       satCenters[s * 3 + 2] = mainCz + d.dir[2] * dist;
     }
 
-    // Particle allocation: main sphere gets 50%, rest split among satellites
+    // Particle allocation: main sphere gets 50%, rest interleaved among satellites
     const mainParticleEnd = Math.floor(count * 0.5);
-    const satParticleCount = satCount > 0
-      ? Math.floor((count - mainParticleEnd) / satCount)
-      : 0;
 
     // --- Main sphere particles: rays from main center ---
     for (let i = 0; i < mainParticleEnd; i++) {
@@ -384,7 +381,6 @@ export function registerSphereMetaballLinear(
       const ny = normals[i * 3 + 1];
       const nz = normals[i * 3 + 2];
 
-      // Ray: mainCenter + n̂ * t
       let tLow = 0.05;
       let tHigh = mainR * 4;
 
@@ -418,53 +414,61 @@ export function registerSphereMetaballLinear(
       positions[i * 3 + 2] = mainCz + nz * tF;
     }
 
-    // --- Satellite particles: rays from each satellite center ---
-    for (let s = 0; s < satCount; s++) {
+    // --- Satellite particles: interleaved + linear scan for first crossing ---
+    const satFallbackR = satR / Math.sqrt(threshold);
+    const scanRange = satR * 4;
+    const scanSteps = 12;
+    const scanDt = scanRange / scanSteps;
+
+    for (let i = mainParticleEnd; i < count; i++) {
+      const s = (i - mainParticleEnd) % satCount;
       const scx = satCenters[s * 3];
       const scy = satCenters[s * 3 + 1];
       const scz = satCenters[s * 3 + 2];
 
-      const start = mainParticleEnd + s * satParticleCount;
-      const end = (s === satCount - 1) ? count : start + satParticleCount;
+      const nx = normals[i * 3];
+      const ny = normals[i * 3 + 1];
+      const nz = normals[i * 3 + 2];
 
-      for (let i = start; i < end; i++) {
-        const nx = normals[i * 3];
-        const ny = normals[i * 3 + 1];
-        const nz = normals[i * 3 + 2];
-
-        // Ray: satCenter + n̂ * t
-        let tLow = 0.05;
-        let tHigh = satR * 4;
-
-        const fHigh = metaballField(
-          scx + nx * tHigh, scy + ny * tHigh, scz + nz * tHigh,
+      // Linear scan: find first threshold crossing (nearest satellite surface)
+      let crossLow = -1, crossHigh = -1;
+      for (let step = 1; step <= scanSteps; step++) {
+        const t = scanDt * step;
+        const f = metaballField(
+          scx + nx * t, scy + ny * t, scz + nz * t,
           mainCx, mainCy, mainCz, mainR2,
           satCenters, satR2, satCount,
         );
-
-        if (fHigh >= threshold) {
-          positions[i * 3] = scx + nx * tHigh;
-          positions[i * 3 + 1] = scy + ny * tHigh;
-          positions[i * 3 + 2] = scz + nz * tHigh;
-          continue;
+        if (f < threshold) {
+          crossLow = scanDt * (step - 1);
+          crossHigh = t;
+          break;
         }
-
-        for (let iter = 0; iter < 8; iter++) {
-          const tMid = (tLow + tHigh) * 0.5;
-          const f = metaballField(
-            scx + nx * tMid, scy + ny * tMid, scz + nz * tMid,
-            mainCx, mainCy, mainCz, mainR2,
-            satCenters, satR2, satCount,
-          );
-          if (f > threshold) tLow = tMid;
-          else tHigh = tMid;
-        }
-
-        const tF = (tLow + tHigh) * 0.5;
-        positions[i * 3] = scx + nx * tF;
-        positions[i * 3 + 1] = scy + ny * tF;
-        positions[i * 3 + 2] = scz + nz * tF;
       }
+
+      if (crossLow < 0) {
+        positions[i * 3] = scx + nx * satFallbackR;
+        positions[i * 3 + 1] = scy + ny * satFallbackR;
+        positions[i * 3 + 2] = scz + nz * satFallbackR;
+        continue;
+      }
+
+      let tLow = Math.max(0.05, crossLow), tHigh = crossHigh;
+      for (let iter = 0; iter < 6; iter++) {
+        const tMid = (tLow + tHigh) * 0.5;
+        const f = metaballField(
+          scx + nx * tMid, scy + ny * tMid, scz + nz * tMid,
+          mainCx, mainCy, mainCz, mainR2,
+          satCenters, satR2, satCount,
+        );
+        if (f > threshold) tLow = tMid;
+        else tHigh = tMid;
+      }
+
+      const tF = (tLow + tHigh) * 0.5;
+      positions[i * 3] = scx + nx * tF;
+      positions[i * 3 + 1] = scy + ny * tF;
+      positions[i * 3 + 2] = scz + nz * tF;
     }
   });
 

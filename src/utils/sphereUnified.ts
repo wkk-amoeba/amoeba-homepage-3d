@@ -229,7 +229,6 @@ function computeMetaballLinearSplit(
   }
 
   const mainParticleEnd = Math.floor(count * 0.5);
-  const satParticleCount = satCount > 0 ? Math.floor((count - mainParticleEnd) / satCount) : 0;
 
   // Main sphere particles: ray-march from main center
   for (let i = 0; i < mainParticleEnd; i++) {
@@ -259,40 +258,62 @@ function computeMetaballLinearSplit(
     output[i * 3 + 2] = mainCz + nz * t;
   }
 
-  // Satellite particles: each group ray-marches from its satellite center
-  for (let s = 0; s < satCount; s++) {
+  // Satellite particles: interleaved assignment + linear scan for first surface crossing
+  // Interleaved: particle i → satellite (i % satCount), ensuring each satellite gets
+  // normals spread across the full index range (avoids spatial clustering from GLB vertex order)
+  const satFallbackR = config.satelliteRadius / Math.sqrt(threshold);
+  const scanRange = config.satelliteRadius * 4;
+  const scanSteps = 12;
+  const scanDt = scanRange / scanSteps;
+
+  for (let i = mainParticleEnd; i < count; i++) {
+    const s = (i - mainParticleEnd) % satCount;
     const scx = satCenters[s * 3];
     const scy = satCenters[s * 3 + 1];
     const scz = satCenters[s * 3 + 2];
-    const start = mainParticleEnd + s * satParticleCount;
-    const end = (s === satCount - 1) ? count : start + satParticleCount;
 
-    for (let i = start; i < end; i++) {
-      const nx = normals[i * 3], ny = normals[i * 3 + 1], nz = normals[i * 3 + 2];
-      let tLow = 0.05, tHigh = config.satelliteRadius * 4;
-      const fHigh = metaballField(
-        scx + nx * tHigh, scy + ny * tHigh, scz + nz * tHigh,
+    const nx = normals[i * 3], ny = normals[i * 3 + 1], nz = normals[i * 3 + 2];
+
+    // Linear scan from satellite center outward to find FIRST surface crossing.
+    // This prevents the bisection from converging to the main sphere's surface
+    // when the metaball field is non-monotonic (satellite near main).
+    let crossLow = -1, crossHigh = -1;
+    for (let step = 1; step <= scanSteps; step++) {
+      const t = scanDt * step;
+      const f = metaballField(
+        scx + nx * t, scy + ny * t, scz + nz * t,
         mainCx, mainCy, mainCz, mainR2, satCenters, satR2, satCount,
       );
-      if (fHigh >= threshold) {
-        output[i * 3] = scx + nx * tHigh;
-        output[i * 3 + 1] = scy + ny * tHigh;
-        output[i * 3 + 2] = scz + nz * tHigh;
-        continue;
+      if (f < threshold) {
+        crossLow = scanDt * (step - 1);
+        crossHigh = t;
+        break;
       }
-      for (let iter = 0; iter < 8; iter++) {
-        const tMid = (tLow + tHigh) * 0.5;
-        const f = metaballField(
-          scx + nx * tMid, scy + ny * tMid, scz + nz * tMid,
-          mainCx, mainCy, mainCz, mainR2, satCenters, satR2, satCount,
-        );
-        if (f > threshold) tLow = tMid; else tHigh = tMid;
-      }
-      const tF = (tLow + tHigh) * 0.5;
-      output[i * 3] = scx + nx * tF;
-      output[i * 3 + 1] = scy + ny * tF;
-      output[i * 3 + 2] = scz + nz * tF;
     }
+
+    if (crossLow < 0) {
+      // Entire scan range above threshold — satellite deep inside merged blob.
+      // Place on satellite's theoretical isolated surface.
+      output[i * 3] = scx + nx * satFallbackR;
+      output[i * 3 + 1] = scy + ny * satFallbackR;
+      output[i * 3 + 2] = scz + nz * satFallbackR;
+      continue;
+    }
+
+    // Refine first crossing with bisection
+    let tLow = Math.max(0.05, crossLow), tHigh = crossHigh;
+    for (let iter = 0; iter < 6; iter++) {
+      const tMid = (tLow + tHigh) * 0.5;
+      const f = metaballField(
+        scx + nx * tMid, scy + ny * tMid, scz + nz * tMid,
+        mainCx, mainCy, mainCz, mainR2, satCenters, satR2, satCount,
+      );
+      if (f > threshold) tLow = tMid; else tHigh = tMid;
+    }
+    const tF = (tLow + tHigh) * 0.5;
+    output[i * 3] = scx + nx * tF;
+    output[i * 3 + 1] = scy + ny * tF;
+    output[i * 3 + 2] = scz + nz * tF;
   }
 }
 
