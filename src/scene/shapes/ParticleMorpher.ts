@@ -73,11 +73,12 @@ export class ParticleMorpher {
   private localZMinUniform = { value: -4.0 };
   private localZMaxUniform = { value: 4.0 };
   private lightDirUniform: { value: THREE.Vector3 };
-  private lightAmbientUniform = { value: particleConfig.lightAmbient };
-  private lightDiffuseUniform = { value: particleConfig.lightDiffuse };
-  private lightSpecularUniform = { value: particleConfig.lightSpecular };
-  private lightShininessUniform = { value: particleConfig.lightShininess };
+  private lightAmbientUniform: { value: number };
+  private lightDiffuseUniform: { value: number };
+  private lightSpecularUniform: { value: number };
+  private lightShininessUniform: { value: number };
   private shapeCenterUniform = { value: new THREE.Vector3(0, 0, 0) };
+  private introLightBlendUniform = { value: 1.0 }; // 0=flat gray, 1=full computed lighting
 
   // Per-particle micro-orbit axes (precomputed at load)
   private orbitAxis1: Float32Array = new Float32Array(0);
@@ -88,6 +89,7 @@ export class ParticleMorpher {
   private introComplete = false;
   private introOpacity = 0;
   private introGatherTriggered = false;
+
 
   // Per-shape animation updaters (called each frame before position computation)
   private shapeUpdaters: Map<number, (delta: number, scrollProgress: number) => void> = new Map();
@@ -110,6 +112,13 @@ export class ParticleMorpher {
     const ld = particleConfig.lightDirection;
     const ldLen = Math.sqrt(ld[0] * ld[0] + ld[1] * ld[1] + ld[2] * ld[2]);
     this.lightDirUniform = { value: new THREE.Vector3(ld[0] / ldLen, ld[1] / ldLen, ld[2] / ldLen) };
+
+    // Initialize lighting uniforms with first model's overrides to avoid flash
+    const firstLighting = modelConfigs[0]?.lighting;
+    this.lightAmbientUniform = { value: firstLighting?.ambient ?? particleConfig.lightAmbient };
+    this.lightDiffuseUniform = { value: firstLighting?.diffuse ?? particleConfig.lightDiffuse };
+    this.lightSpecularUniform = { value: firstLighting?.specular ?? particleConfig.lightSpecular };
+    this.lightShininessUniform = { value: firstLighting?.shininess ?? particleConfig.lightShininess };
 
     this.ready = this.loadShapes(modelConfigs);
   }
@@ -444,6 +453,7 @@ export class ParticleMorpher {
       this.introComplete = false;
       this.introElapsed = 0;
       this.introOpacity = 0;
+      this.introLightBlendUniform.value = 0.0; // start with flat gray (0.5)
       // Use scatterOffsets directly (magnitude 5-15) to fill the entire screen
       for (let i = 0; i < this.particleCount; i++) {
         const i3 = i * 3;
@@ -498,7 +508,6 @@ export class ParticleMorpher {
     const lightSpecularUniform = this.lightSpecularUniform;
     const lightShininessUniform = this.lightShininessUniform;
     const shapeCenterUniform = this.shapeCenterUniform;
-
     material.onBeforeCompile = (shader) => {
       shader.uniforms.depthNearMul = nearMulRef;
       shader.uniforms.depthFarMul = farMulRef;
@@ -510,6 +519,7 @@ export class ParticleMorpher {
       shader.uniforms.lightSpecular = lightSpecularUniform;
       shader.uniforms.lightShininess = lightShininessUniform;
       shader.uniforms.shapeCenter = shapeCenterUniform;
+      shader.uniforms.introLightBlend = this.introLightBlendUniform;
 
       shader.vertexShader = shader.vertexShader.replace(
         'void main() {',
@@ -524,6 +534,7 @@ uniform float lightDiffuse;
 uniform float lightSpecular;
 uniform float lightShininess;
 uniform vec3 shapeCenter;
+uniform float introLightBlend;
 varying float vBrightness;
 void main() {`
       );
@@ -543,7 +554,8 @@ void main() {`
             vec3 viewDir = normalize(cameraPosition - (modelMatrix * vec4(position, 1.0)).xyz);
             vec3 reflectDir = reflect(-lightDir, worldNormal);
             float spec = pow(max(dot(viewDir, reflectDir), 0.0), lightShininess);
-            vBrightness = lightAmbient + lightDiffuse * diff + lightSpecular * spec;
+            float computedBrightness = lightAmbient + lightDiffuse * diff + lightSpecular * spec;
+            vBrightness = mix(0.5, computedBrightness, introLightBlend);
           }`
       );
 
@@ -708,11 +720,10 @@ void main() {`
         targetShininess = fromSh + (toSh - fromSh) * phase.t;
       }
 
-      const lerpRate = 0.05;
-      this.lightAmbientUniform.value += (targetAmbient - this.lightAmbientUniform.value) * lerpRate;
-      this.lightDiffuseUniform.value += (targetDiffuse - this.lightDiffuseUniform.value) * lerpRate;
-      this.lightSpecularUniform.value += (targetSpecular - this.lightSpecularUniform.value) * lerpRate;
-      this.lightShininessUniform.value += (targetShininess - this.lightShininessUniform.value) * lerpRate;
+      this.lightAmbientUniform.value = targetAmbient;
+      this.lightDiffuseUniform.value = targetDiffuse;
+      this.lightSpecularUniform.value = targetSpecular;
+      this.lightShininessUniform.value = targetShininess;
     }
 
     // Update spinTop angles for all shapes
@@ -786,6 +797,12 @@ void main() {`
       // scatter = 1 - eased: starts at 1 (fully scattered), ends at 0 (formed)
       const scatter = 1 - eased;
 
+      // Blend lighting and depth sizing: flat gray → computed lighting over intro
+      this.introLightBlendUniform.value = eased;
+      // Blend depth multipliers: 1.0 (uniform size) → actual values
+      this.depthNearMulUniform.value = 1.0 + (particleConfig.depthNearMul - 1.0) * eased;
+      this.depthFarMulUniform.value = 1.0 + (particleConfig.depthFarMul - 1.0) * eased;
+
       this.orbitTime += delta;
       const noiseAmp = particleConfig.microNoiseAmp;
 
@@ -829,10 +846,21 @@ void main() {`
         this.currentPositions[i3] = bx + orbitX;
         this.currentPositions[i3 + 1] = by + orbitY;
         this.currentPositions[i3 + 2] = bz + orbitZ;
+
+        // Blend depthSize into sizeMultipliers during intro (1.0 → depthMul)
+        if (first.depthSize) {
+          const z = this.currentPositions[i3 + 2] - first.worldOffset.z;
+          const normalizedZ = (z - first.depthSize.zMin) / (first.depthSize.zMax - first.depthSize.zMin || 1);
+          const clampedZ = Math.max(0, Math.min(1, normalizedZ));
+          const depthMul = first.depthSize.min + (first.depthSize.max - first.depthSize.min) * clampedZ;
+          this.sizeMultipliers[i] = 1.0 + (depthMul - 1.0) * eased;
+        }
       }
 
       const posAttr = this.points.geometry.getAttribute('position') as THREE.BufferAttribute;
       posAttr.needsUpdate = true;
+      const sizeAttr = this.points.geometry.getAttribute('mouseMul') as THREE.BufferAttribute;
+      sizeAttr.needsUpdate = true;
 
       if (!this.introGatherTriggered && t >= 0.25) {
         this.introGatherTriggered = true;
@@ -840,6 +868,9 @@ void main() {`
       }
       if (t >= 1) {
         this.introComplete = true;
+        this.introLightBlendUniform.value = 1.0;
+        this.depthNearMulUniform.value = particleConfig.depthNearMul;
+        this.depthFarMulUniform.value = particleConfig.depthFarMul;
         (this.points.material as THREE.PointsMaterial).opacity = 1;
         window.dispatchEvent(new Event('intro-complete'));
         console.log('ParticleMorpher: intro animation complete');
