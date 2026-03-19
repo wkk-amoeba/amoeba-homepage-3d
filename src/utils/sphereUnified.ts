@@ -314,6 +314,10 @@ export interface UnifiedSphereConfig {
   deformLighting?: { ambient?: number; diffuse?: number; specular?: number; shininess?: number };
   orbitalLighting?: { ambient?: number; diffuse?: number; specular?: number; shininess?: number };
   orbital2Lighting?: { ambient?: number; diffuse?: number; specular?: number; shininess?: number };
+  // 서브섹션별 파티클 수 (미지정 시 초기 activeCount 유지)
+  deformActiveCount?: number;
+  orbitalActiveCount: 1000;
+  orbital2ActiveCount: 10000; // 위선 liner orbital2ActiveCount?: number;
 }
 
 let activeUnifiedConfig: UnifiedSphereConfig | null = null;
@@ -325,7 +329,7 @@ export function getActiveUnifiedConfig(): UnifiedSphereConfig | null {
 
 export function registerUnifiedSphere(
   morpher: {
-    getShapeTargets: () => { positions: Float32Array; holdScatter: number; lighting?: { ambient?: number; diffuse?: number; specular?: number; shininess?: number } }[];
+    getShapeTargets: () => { positions: Float32Array; activeCount: number; holdScatter: number; lighting?: { ambient?: number; diffuse?: number; specular?: number; shininess?: number } }[];
     setShapeUpdater: (idx: number, fn: (delta: number, scrollProgress: number) => void) => void;
     getSectionBounds: (idx: number) => { start: number; end: number } | null;
   },
@@ -386,12 +390,20 @@ export function registerUnifiedSphere(
   };
 
   const positions = shape.positions;
-  const count = positions.length / 3;
+  // activeCount 기반으로 계산 (풀 전체가 아닌 유효 파티클만)
+  const initialActiveCount = shape.activeCount;
+  // 동적 activeCount를 위해 최대 가능 크기로 버퍼 할당
+  const maxCount = Math.max(
+    initialActiveCount,
+    config.deformActiveCount ?? 0,
+    config.orbitalActiveCount ?? 0,
+    config.orbital2ActiveCount ?? 0,
+  );
 
-  // Precompute shared state
-  const normals = new Float32Array(count * 3);
-  const radii = new Float32Array(count);
-  for (let i = 0; i < count; i++) {
+  // Precompute shared state (maxCount 크기로 할당)
+  const normals = new Float32Array(maxCount * 3);
+  const radii = new Float32Array(maxCount);
+  for (let i = 0; i < initialActiveCount; i++) {
     const ox = positions[i * 3], oy = positions[i * 3 + 1], oz = positions[i * 3 + 2];
     const r = Math.sqrt(ox * ox + oy * oy + oz * oz);
     radii[i] = r;
@@ -403,12 +415,12 @@ export function registerUnifiedSphere(
   }
 
   let avgRadius = 0;
-  for (let i = 0; i < count; i++) avgRadius += radii[i];
-  avgRadius /= count;
+  for (let i = 0; i < initialActiveCount; i++) avgRadius += radii[i];
+  avgRadius /= initialActiveCount;
 
   // Scratch buffers for blending
-  const bufA = new Float32Array(count * 3);
-  const bufB = new Float32Array(count * 3);
+  const bufA = new Float32Array(maxCount * 3);
+  const bufB = new Float32Array(maxCount * 3);
 
   // Satellite data: orbital uses circular orbits, orbital2 uses linear reciprocation
   const allSatellites = makeSatellites(8);
@@ -433,6 +445,15 @@ export function registerUnifiedSphere(
     const tw = config.transitionWidth;
     const S1 = config.subSection1; // deform → orbital boundary
     const S2 = config.subSection2; // orbital → orbital2 boundary
+
+    // 서브섹션별 동적 activeCount 결정
+    let targetActiveCount = initialActiveCount;
+    const getSubCount = (effect: string): number => {
+      if (effect === 'deform' && config.deformActiveCount) return config.deformActiveCount;
+      if (effect === 'orbital' && config.orbitalActiveCount) return config.orbitalActiveCount;
+      if (effect === 'orbital2' && config.orbital2ActiveCount) return config.orbital2ActiveCount;
+      return initialActiveCount;
+    };
 
     // Dynamically set holdScatter based on active sub-section (lerp during transitions)
     if (localProgress < S1 - tw) {
@@ -518,6 +539,15 @@ export function registerUnifiedSphere(
     // Smoothstep the blend
     blendT = Math.max(0, Math.min(1, blendT));
     blendT = blendT * blendT * (3 - 2 * blendT);
+
+    // 서브섹션별 동적 activeCount 적용
+    targetActiveCount = getSubCount(effectA);
+    if (effectB) {
+      const toCount = getSubCount(effectB);
+      targetActiveCount = Math.round(targetActiveCount + (toCount - targetActiveCount) * blendT);
+    }
+    shape.activeCount = targetActiveCount;
+    const count = targetActiveCount;
 
     // Compute effect A
     const outA = effectB ? bufA : positions; // write directly if no blend needed

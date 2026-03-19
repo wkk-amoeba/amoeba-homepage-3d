@@ -64,11 +64,27 @@ export interface ModelData {
 }
 
 // 3D 모델 정의
-// geometry가 있으면 프로그래밍 생성, modelPath가 있으면 GLB .bin 로드 -1.5, 0.3, 0
+// ┌─────────────────────────────────────────────────────────────────────────┐
+// │ 씬 번호 ≠ models[] 인덱스. 씬 01-02는 models[0] 하나를 공유           │
+// │                                                                         │
+// │ 씬 01 (원/Sphere)   → models[0] — 프로그래밍 생성 (sphereUnified.ts)   │
+// │ 씬 02 (위성/Satellite) → models[0] — 같은 shape의 서브섹션              │
+// │ 씬 03 (Gyro)         → models[1] — 3D 파일 (GLB)                       │
+// │ 씬 04 (Human)        → models[2] — 3D 파일 (FBX)                       │
+// │ 씬 05 (City3)        → models[3] — 3D 파일 (GLB)                       │
+// │                                                                         │
+// │ particleCount: 모델별 파티클 수 (미지정 시 .bin 버텍스 수 사용)         │
+// │ 씬 01-02 서브섹션별 파티클 수는 sphereUnified.ts config에서 설정:       │
+// │   deformActiveCount / orbitalActiveCount / orbital2ActiveCount          │
+// └─────────────────────────────────────────────────────────────────────────┘
 export const models: ModelData[] = [
-  { id: 0, name: 'Sphere', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [0, 0, 0], holdScatter: 0.015, sectionSpan: 2, depthSize: { min: 0.1, max: 0.7 }, lighting: { ambient: 0.15, diffuse: 0.4, specular: 1.0, shininess: 2.0 }, },
+  // 씬 01-02: Sphere — lighting/holdScatter는 sphereUnified.ts 서브섹션별로 런타임 덮어씌워짐
+  { id: 0, name: 'Sphere', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [0, 0, 0], holdScatter: 0.015, sectionSpan: 1, depthSize: { min: 0.1, max: 0.7 }, lighting: { ambient: 0.15, diffuse: 0.4, specular: 1.0, shininess: 2.0 }, },
+  // 씬 03: Gyro
   { id: 1, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.4, position: [0, 0, 0], holdScatter: 0.01, sectionSpan: 1, radialSize: { min: 0.5, max: 1.0 }, spinTop: { tilt: 0, spinSpeed: 0.3, precessionSpeed: 0.4, nutationAmp: 0.2443, nutationSpeed: 1.5 }, enterTransition: { noRotation: false, scatterScale: 0.03 }, lighting: { ambient: 0.1, diffuse: 0.3, specular: 0, shininess: 2.0 } },
-  { id: 2, name: 'Human', scale: 0.35, position: [0, -1.4, 0], holdScatter: 0.006, lighting: { ambient: 0.05, diffuse: 0.2, specular: 0, shininess: 2.0 } },  // precomputedPositions는 런타임에 주입
+  // 씬 04: Human — precomputedPositions는 런타임에 주입
+  { id: 2, name: 'Human', scale: 0.35, position: [0, -1.4, 0], holdScatter: 0.006, lighting: { ambient: 0.05, diffuse: 0.2, specular: 0, shininess: 2.0 } },
+  // 씬 05: City3
   { id: 3, name: 'City3', modelPath: '/models/city_23_high.glb', scale: 1.0, mobileScale: 0.85, position: [0, -1, 0], particleCount: 50000, heightSize: { min: 0.05, max: 0.8, mobileMin: 0.2 }, autoRotateSpeed: -0.3, enterTransition: { noRotation: true, gravity: true, gravityHeight: 3.5, gravityDuration: 5.0, gravityWobbleFreq: 10.0, scatterScale: 0.08 }, lighting: { ambient: 0.05, diffuse: 0.2, specular: 0, shininess: 2.0 } },
 ];
 
@@ -78,15 +94,15 @@ export type ParticleMode = 'dots' | 'tetrahedron';
 // 파티클 설정
 export const particleConfig = {
   size: 0.02,              // 파티클 크기
-  depthNearMul: 1.7,      // 가까운 파티클 크기 배율 (최대)
+  depthNearMul: 2.6,      // 가까운 파티클 크기 배율 (최대)
   depthFarMul: 0.3,       // 먼 파티클 크기 배율 (최소)
   mode: 'dots' as ParticleMode,
   mouseRadius: 0.3,        // 돔 반경 (로컬 유닛)
   activationRadius: 2.0,   // 마우스 근접 시 효과 활성 반경 (월드 유닛)
   mouseAttract: false,     // true=마우스로 모임(attract), false=밀어냄(scatter)
   mouseStrength: 0.5,      // 마우스 인터랙션 강도
-  microNoiseAmp: 0.1,    // 파티클 미세 공전 반지름 (0 = 비활성)
-  microNoiseSpeed: 0.05,    // 미세 공전 속도 (rad/s)
+  microNoiseAmp: 0.007,    // 파티클 미세 공전 반지름 (0 = 비활성)
+  microNoiseSpeed: 3.0,    // 미세 공전 속도 (rad/s)
   tetrahedronSize: 0.06,   // 삼각뿔 인스턴스 크기
   tetrahedronRotationSpeed: 0.5, // 삼각뿔 회전 속도 (rad/s)
   // 스프링 물리 (마우스 마그넷)
@@ -105,7 +121,7 @@ export const particleConfig = {
   scatterScale: 0.03,
   // 가짜 라이팅 (파티클 위치 기반 법선으로 명암)
   lightEnabled: true,
-  lightDirection: [-0.7, 0.9, 0.7] as [number, number, number],  // 광원 방향 (좌상단)
+  lightDirection: [-0.2, 0.2, 0.0] as [number, number, number],  // 광원 방향 (좌상단)
   lightAmbient: 0.05,            // 최소 밝기 (그림자 부분)
   lightDiffuse: 0.2,             // 확산광 강도
   lightSpecular: 1.0,            // 스페큘러 강도 (핀 조명 하이라이트)
@@ -120,14 +136,14 @@ export const particleConfig = {
 };
 
 // 스크롤 설정 — sectionGap은 1 span 단위의 크기, 총 span 합계로 균등 배분
-// 총 span = Sphere(2) + Gyro(1) + Human(1) + City3(1) = 5
+// 총 span = Sphere(1) + Gyro(1) + Human(1) + City3(1) = 4
 export const scrollConfig = {
   introEnd: 0,             // 인트로 없음
   sectionStart: 0,         // 첫 모델 즉시 시작
-  sectionGap: 1 / 5,       // 20% per span unit
-  sectionDuration: 1 / 5,  // 20% per span unit
+  sectionGap: 1 / 4,       // 25% per span unit
+  sectionDuration: 1 / 4,  // 25% per span unit
   previewOffset: 0,        // 프리뷰 없음
-  modelCount: 5,           // 총 span 합계 (deprecated — getPhase에서 span 누적 사용)
+  modelCount: 4,           // 총 span 합계 (deprecated — getPhase에서 span 누적 사용)
 };
 
 // 애니메이션 페이즈 설정 (진입 → 고정 → 퇴장)

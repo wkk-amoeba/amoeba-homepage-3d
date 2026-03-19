@@ -5,6 +5,7 @@ import { createShapePoints } from '../../utils/shapeGenerators';
 
 interface ShapeTarget {
   positions: Float32Array;    // 파티클 위치 (원점 기준, 정규화+스케일 적용됨)
+  activeCount: number;        // 실제 유효 파티클 수 (이 수를 넘는 파티클은 비활성)
   worldOffset: THREE.Vector3; // 월드 위치 오프셋
   name: string;
   zMin: number;
@@ -221,6 +222,7 @@ export class ParticleMorpher {
 
     for (const config of modelConfigs) {
       let positions: Float32Array;
+      let activeCount: number; // 실제 유효 파티클 수
 
       if (config.precomputedPositions) {
         // Use pre-computed positions (e.g., from FBX skinned mesh extraction)
@@ -235,18 +237,22 @@ export class ParticleMorpher {
             }
           }
           positions = new Float32Array(sampled);
+          activeCount = positions.length / 3;
         } else {
+          // 실제 데이터만 복사, 초과분은 (0,0,0)으로 채움
           positions = new Float32Array(this.particleCount * 3);
-          for (let i = 0; i < this.particleCount; i++) {
-            const src = (i % rawCount) * 3;
-            positions[i * 3] = raw[src];
-            positions[i * 3 + 1] = raw[src + 1];
-            positions[i * 3 + 2] = raw[src + 2];
+          for (let i = 0; i < rawCount; i++) {
+            positions[i * 3] = raw[i * 3];
+            positions[i * 3 + 1] = raw[i * 3 + 1];
+            positions[i * 3 + 2] = raw[i * 3 + 2];
           }
+          // 나머지는 Float32Array 기본값 0으로 이미 채워짐
+          activeCount = rawCount;
         }
-        console.log(`ParticleMorpher: loaded ${config.name} from precomputed (${rawCount} → ${positions.length / 3} pts)`);
+        console.log(`ParticleMorpher: loaded ${config.name} from precomputed (${rawCount} → ${activeCount} active / ${this.particleCount} pool)`);
       } else if (config.geometry) {
         positions = createShapePoints(config.geometry, this.particleCount);
+        activeCount = this.particleCount;
       } else if (config.modelPath) {
         // GLB .bin pipeline
         const binPath = config.modelPath
@@ -260,33 +266,45 @@ export class ParticleMorpher {
           const rawPositions = new Float32Array(arrayBuffer);
           const rawCount = rawPositions.length / 3;
 
-          // Sub-sample or pad to match particleCount
-          if (rawCount >= this.particleCount) {
-            const step = Math.max(1, Math.ceil(rawCount / this.particleCount));
+          // 모델별 particleCount가 설정된 경우 해당 수만큼, 아니면 디바이스 multiplier 적용
+          const targetCount = config.particleCount
+            ? Math.floor(config.particleCount * multiplier)
+            : Math.floor(Math.min(rawCount, baseCount) * multiplier);
+
+          // Sub-sample or pad to match pool size
+          if (rawCount >= targetCount) {
+            const step = Math.max(1, Math.ceil(rawCount / targetCount));
             const sampled: number[] = [];
-            for (let i = 0; i < rawCount && sampled.length / 3 < this.particleCount; i++) {
+            for (let i = 0; i < rawCount && sampled.length / 3 < targetCount; i++) {
               if (i % step === 0) {
                 sampled.push(rawPositions[i * 3], rawPositions[i * 3 + 1], rawPositions[i * 3 + 2]);
               }
             }
-            positions = new Float32Array(sampled);
-          } else {
-            // Repeat points to fill particleCount
+            // 풀 크기에 맞추되, 초과분은 0
             positions = new Float32Array(this.particleCount * 3);
-            for (let i = 0; i < this.particleCount; i++) {
-              const src = (i % rawCount) * 3;
-              positions[i * 3] = rawPositions[src];
-              positions[i * 3 + 1] = rawPositions[src + 1];
-              positions[i * 3 + 2] = rawPositions[src + 2];
+            for (let j = 0; j < sampled.length; j++) {
+              positions[j] = sampled[j];
             }
+            activeCount = sampled.length / 3;
+          } else {
+            // rawCount < targetCount: 실제 데이터만 복사, 초과분은 0
+            positions = new Float32Array(this.particleCount * 3);
+            for (let i = 0; i < rawCount; i++) {
+              positions[i * 3] = rawPositions[i * 3];
+              positions[i * 3 + 1] = rawPositions[i * 3 + 1];
+              positions[i * 3 + 2] = rawPositions[i * 3 + 2];
+            }
+            activeCount = rawCount;
           }
-          console.log(`ParticleMorpher: loaded ${config.name} from ${binPath} (${rawCount} → ${positions.length / 3} pts)`);
+          console.log(`ParticleMorpher: loaded ${config.name} from ${binPath} (${rawCount} raw → ${activeCount} active / ${this.particleCount} pool)`);
         } catch (err) {
           console.error(`ParticleMorpher: failed to load ${binPath}, falling back to sphere`, err);
           positions = createShapePoints('sphere', this.particleCount);
+          activeCount = this.particleCount;
         }
       } else {
         positions = createShapePoints('sphere', this.particleCount);
+        activeCount = this.particleCount;
       }
 
       // Ensure positions array is exactly particleCount * 3
@@ -294,12 +312,13 @@ export class ParticleMorpher {
         const adjusted = new Float32Array(this.particleCount * 3);
         adjusted.set(positions.subarray(0, Math.min(positions.length, adjusted.length)));
         positions = adjusted;
+        activeCount = Math.min(activeCount, this.particleCount);
       }
 
-      // Normalize to 8 units + apply scale
+      // Normalize to 8 units + apply scale (activeCount만 대상)
       let minX = Infinity, minY = Infinity, minZ = Infinity;
       let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
-      for (let i = 0; i < this.particleCount; i++) {
+      for (let i = 0; i < activeCount; i++) {
         const i3 = i * 3;
         const x = positions[i3], y = positions[i3 + 1], z = positions[i3 + 2];
         if (x < minX) minX = x; if (x > maxX) maxX = x;
@@ -314,7 +333,8 @@ export class ParticleMorpher {
       const effectiveScale = (isMobile && config.mobileScale !== undefined) ? config.mobileScale : config.scale;
       const finalScale = normalizeScale * effectiveScale;
 
-      for (let i = 0; i < positions.length; i++) {
+      // activeCount 범위만 스케일 적용 (초과분은 이미 0)
+      for (let i = 0; i < activeCount * 3; i++) {
         positions[i] *= finalScale;
       }
 
@@ -323,7 +343,7 @@ export class ParticleMorpher {
         const euler = new THREE.Euler(config.rotation[0], config.rotation[1], config.rotation[2]);
         const mat = new THREE.Matrix4().makeRotationFromEuler(euler);
         const v = new THREE.Vector3();
-        for (let i = 0; i < this.particleCount; i++) {
+        for (let i = 0; i < activeCount; i++) {
           const i3 = i * 3;
           v.set(positions[i3], positions[i3 + 1], positions[i3 + 2]);
           v.applyMatrix4(mat);
@@ -333,9 +353,9 @@ export class ParticleMorpher {
         }
       }
 
-      // Compute Z bounds for depth shader
+      // Compute Z bounds for depth shader (activeCount만 대상)
       let zMin = Infinity, zMax = -Infinity;
-      for (let i = 0; i < this.particleCount; i++) {
+      for (let i = 0; i < activeCount; i++) {
         const z = positions[i * 3 + 2];
         if (z < zMin) zMin = z;
         if (z > zMax) zMax = z;
@@ -345,7 +365,7 @@ export class ParticleMorpher {
       let heightSizeData: ShapeTarget['heightSize'] = undefined;
       if (config.heightSize) {
         let yMin = Infinity, yMax = -Infinity;
-        for (let i = 0; i < this.particleCount; i++) {
+        for (let i = 0; i < activeCount; i++) {
           const y = positions[i * 3 + 1];
           if (y < yMin) yMin = y;
           if (y > yMax) yMax = y;
@@ -357,7 +377,7 @@ export class ParticleMorpher {
       let radialSizeData: ShapeTarget['radialSize'] = undefined;
       if (config.radialSize) {
         let maxRadius = 0;
-        for (let i = 0; i < this.particleCount; i++) {
+        for (let i = 0; i < activeCount; i++) {
           const i3 = i * 3;
           const x = positions[i3], z = positions[i3 + 2];
           const r = Math.sqrt(x * x + z * z);
@@ -387,6 +407,7 @@ export class ParticleMorpher {
       const pos = config.position || [0, 0, 0];
       this.shapeTargets.push({
         positions,
+        activeCount,
         worldOffset: new THREE.Vector3(pos[0], pos[1], pos[2]),
         name: config.name,
         zMin,
@@ -422,7 +443,10 @@ export class ParticleMorpher {
     this.mouseOffset = new Float32Array(this.particleCount * 3);
     this.mouseVelocity = new Float32Array(this.particleCount * 3);
     this.sizeMultipliers = new Float32Array(this.particleCount);
-    for (let i = 0; i < this.particleCount; i++) this.sizeMultipliers[i] = 1.0;
+    const firstActiveCount = this.shapeTargets[0].activeCount;
+    for (let i = 0; i < this.particleCount; i++) {
+      this.sizeMultipliers[i] = i < firstActiveCount ? 1.0 : 0;
+    }
 
     // Pre-compute scatter offsets (random directions, distance 5-15)
     this.scatterOffsets = new Float32Array(this.particleCount * 3);
@@ -465,11 +489,15 @@ export class ParticleMorpher {
       this.introOpacity = 0;
       this.introLightBlendUniform.value = 0.0; // start with flat gray (0.5)
       // Use scatterOffsets directly (magnitude 5-15) to fill the entire screen
+      // 비활성 파티클은 원점에 숨김
       for (let i = 0; i < this.particleCount; i++) {
         const i3 = i * 3;
-        this.currentPositions[i3] = this.scatterOffsets[i3];
-        this.currentPositions[i3 + 1] = this.scatterOffsets[i3 + 1];
-        this.currentPositions[i3 + 2] = this.scatterOffsets[i3 + 2];
+        if (i < firstActiveCount) {
+          this.currentPositions[i3] = this.scatterOffsets[i3];
+          this.currentPositions[i3 + 1] = this.scatterOffsets[i3 + 1];
+          this.currentPositions[i3 + 2] = this.scatterOffsets[i3 + 2];
+        }
+        // 비활성 파티클은 Float32Array 기본값 0 유지
       }
     } else {
       this.introComplete = true;
@@ -780,7 +808,7 @@ void main() {`
         const noiseAmp = particleConfig.microNoiseAmp;
         if (noiseAmp > 0) {
           this.orbitTime += delta;
-          for (let i = 0; i < this.particleCount; i++) {
+          for (let i = 0; i < first.activeCount; i++) {
             const i3 = i * 3;
             const angle = this.orbitTime * particleConfig.microNoiseSpeed + this.scatterOffsets[i3];
             const cosA = Math.cos(angle), sinA = Math.sin(angle);
@@ -824,7 +852,7 @@ void main() {`
       const cx = first.worldOffset.x;
       const cz = first.worldOffset.z;
 
-      for (let i = 0; i < this.particleCount; i++) {
+      for (let i = 0; i < first.activeCount; i++) {
         const i3 = i * 3;
         // Lerp: scattered position → target shape position (including holdScatter)
         const hs = first.holdScatter;
@@ -1066,47 +1094,65 @@ void main() {`
       }
     }
 
-    // --- Per-particle position computation ---
-    for (let i = 0; i < this.particleCount; i++) {
+    // --- Per-particle position computation (activeCount 기반 최적화) ---
+    let loopCount: number;
+    if (phase.type === 'hold') {
+      loopCount = this.shapeTargets[phase.shapeIdx].activeCount;
+    } else {
+      const fromAC = this.shapeTargets[phase.fromIdx].activeCount;
+      const toAC = this.shapeTargets[phase.toIdx].activeCount;
+      loopCount = Math.max(fromAC, toAC);
+    }
+
+    for (let i = 0; i < loopCount; i++) {
       const i3 = i * 3;
 
       // Compute base position based on phase
       let baseX: number, baseY: number, baseZ: number;
+      let isInactive = false; // 이 파티클이 현재 phase에서 비활성인지
 
       if (phase.type === 'hold') {
         const shape = this.shapeTargets[phase.shapeIdx];
-        baseX = shape.positions[i3] + shape.worldOffset.x;
-        baseY = shape.positions[i3 + 1] + shape.worldOffset.y;
-        baseZ = shape.positions[i3 + 2] + shape.worldOffset.z;
-        // Apply holdScatter: add scatter offset to keep particles partially dispersed
-        if (shape.holdScatter > 0) {
-          baseX += this.scatterOffsets[i3] * shape.holdScatter;
-          baseY += this.scatterOffsets[i3 + 1] * shape.holdScatter;
-          baseZ += this.scatterOffsets[i3 + 2] * shape.holdScatter;
-        }
-        // Gravity settle: particles fall from above into position over time
-        if (this.gravityTriggered && this.gravityActiveShapeIdx === phase.shapeIdx) {
-          const enterTr = shape.enterTransition!;
-          const gravH = enterTr.gravityHeight ?? 8;
-          const settleDuration = enterTr.gravityDuration ?? 3.0;
-          // Per-particle stagger: scatter offset으로 각 파티클 낙하 시작 시간 다르게
-          const stagger = (this.scatterOffsets[i3] * 0.5 + 0.5) * 1.5; // 0~1.5초 지연
-          const particleTime = Math.max(0, this.gravitySettleTime - stagger);
-          const fallT = Math.min(1, particleTime / settleDuration);
-          // easeInQuad: 처음엔 천천히, 점점 가속 (자유낙하 느낌)
-          const fallProgress = fallT * fallT;
-          const yOffset = gravH * (1 - fallProgress);
-          baseY += yOffset;
-          // 낙하 중 흔들림 (감쇠 진동): 떨어지면서 XZ로 살짝 흔들리다 착지 시 멈춤
-          if (fallT < 1) {
-            const wobbleDecay = 1 - fallT; // 착지에 가까울수록 감소
-            const wobbleFreq = enterTr.gravityWobbleFreq ?? 4.0;
-            const wobbleAmp = 0.3 * wobbleDecay; // 최대 흔들림 반경
-            // 파티클마다 다른 위상으로 흔들리도록 scatter offset 활용
-            const phase1 = this.scatterOffsets[i3 + 1] * Math.PI * 2;
-            const phase2 = this.scatterOffsets[i3 + 2] * Math.PI * 2;
-            baseX += Math.sin(particleTime * wobbleFreq + phase1) * wobbleAmp;
-            baseZ += Math.cos(particleTime * wobbleFreq + phase2) * wobbleAmp;
+        if (i >= shape.activeCount) {
+          // 비활성 파티클: 중심에 배치, 나중에 sizeMul=0
+          baseX = shape.worldOffset.x;
+          baseY = shape.worldOffset.y;
+          baseZ = shape.worldOffset.z;
+          isInactive = true;
+        } else {
+          baseX = shape.positions[i3] + shape.worldOffset.x;
+          baseY = shape.positions[i3 + 1] + shape.worldOffset.y;
+          baseZ = shape.positions[i3 + 2] + shape.worldOffset.z;
+          // Apply holdScatter: add scatter offset to keep particles partially dispersed
+          if (shape.holdScatter > 0) {
+            baseX += this.scatterOffsets[i3] * shape.holdScatter;
+            baseY += this.scatterOffsets[i3 + 1] * shape.holdScatter;
+            baseZ += this.scatterOffsets[i3 + 2] * shape.holdScatter;
+          }
+          // Gravity settle: particles fall from above into position over time
+          if (this.gravityTriggered && this.gravityActiveShapeIdx === phase.shapeIdx) {
+            const enterTr = shape.enterTransition!;
+            const gravH = enterTr.gravityHeight ?? 8;
+            const settleDuration = enterTr.gravityDuration ?? 3.0;
+            // Per-particle stagger: scatter offset으로 각 파티클 낙하 시작 시간 다르게
+            const stagger = (this.scatterOffsets[i3] * 0.5 + 0.5) * 1.5; // 0~1.5초 지연
+            const particleTime = Math.max(0, this.gravitySettleTime - stagger);
+            const fallT = Math.min(1, particleTime / settleDuration);
+            // easeInQuad: 처음엔 천천히, 점점 가속 (자유낙하 느낌)
+            const fallProgress = fallT * fallT;
+            const yOffset = gravH * (1 - fallProgress);
+            baseY += yOffset;
+            // 낙하 중 흔들림 (감쇠 진동): 떨어지면서 XZ로 살짝 흔들리다 착지 시 멈춤
+            if (fallT < 1) {
+              const wobbleDecay = 1 - fallT; // 착지에 가까울수록 감소
+              const wobbleFreq = enterTr.gravityWobbleFreq ?? 4.0;
+              const wobbleAmp = 0.3 * wobbleDecay; // 최대 흔들림 반경
+              // 파티클마다 다른 위상으로 흔들리도록 scatter offset 활용
+              const phase1 = this.scatterOffsets[i3 + 1] * Math.PI * 2;
+              const phase2 = this.scatterOffsets[i3 + 2] * Math.PI * 2;
+              baseX += Math.sin(particleTime * wobbleFreq + phase1) * wobbleAmp;
+              baseZ += Math.cos(particleTime * wobbleFreq + phase2) * wobbleAmp;
+            }
           }
         }
       } else {
@@ -1114,48 +1160,87 @@ void main() {`
         const to = this.shapeTargets[phase.toIdx];
         const t = this.smoothstep(phase.t);
         const enterTr = to.enterTransition;
+        const fromActive = from.activeCount;
+        const toActive = to.activeCount;
 
-        const fhs = from.holdScatter;
-        const ths = to.holdScatter;
-        const fromX = from.positions[i3] + from.worldOffset.x + (fhs > 0 ? this.scatterOffsets[i3] * fhs : 0);
-        const fromY = from.positions[i3 + 1] + from.worldOffset.y + (fhs > 0 ? this.scatterOffsets[i3 + 1] * fhs : 0);
-        const fromZ = from.positions[i3 + 2] + from.worldOffset.z + (fhs > 0 ? this.scatterOffsets[i3 + 2] * fhs : 0);
-        const toX = to.positions[i3] + to.worldOffset.x + (ths > 0 ? this.scatterOffsets[i3] * ths : 0);
-        const toY = to.positions[i3 + 1] + to.worldOffset.y + (ths > 0 ? this.scatterOffsets[i3 + 1] * ths : 0);
-        const toZ = to.positions[i3 + 2] + to.worldOffset.z + (ths > 0 ? this.scatterOffsets[i3 + 2] * ths : 0);
+        if (i >= fromActive && i >= toActive) {
+          // 양쪽 모두 비활성
+          baseX = effectiveCenter.x;
+          baseY = effectiveCenter.y;
+          baseZ = effectiveCenter.z;
+          isInactive = true;
+        } else {
+          const fhs = from.holdScatter;
+          const ths = to.holdScatter;
+          const scatterScaleVal = enterTr?.scatterScale ?? particleConfig.scatterScale;
 
-        // Lerp between shapes
-        const lerpX = fromX + (toX - fromX) * t;
-        const lerpY = fromY + (toY - fromY) * t;
-        const lerpZ = fromZ + (toZ - fromZ) * t;
+          // from 위치 결정
+          let fX: number, fY: number, fZ: number;
+          if (i < fromActive) {
+            fX = from.positions[i3] + from.worldOffset.x + (fhs > 0 ? this.scatterOffsets[i3] * fhs : 0);
+            fY = from.positions[i3 + 1] + from.worldOffset.y + (fhs > 0 ? this.scatterOffsets[i3 + 1] * fhs : 0);
+            fZ = from.positions[i3 + 2] + from.worldOffset.z + (fhs > 0 ? this.scatterOffsets[i3 + 2] * fhs : 0);
+          } else {
+            // from에 없음 → to 위치에서 scatter 상태로 시작
+            fX = to.positions[i3] + to.worldOffset.x + this.scatterOffsets[i3] * scatterScaleVal * 5;
+            fY = to.positions[i3 + 1] + to.worldOffset.y + this.scatterOffsets[i3 + 1] * scatterScaleVal * 5;
+            fZ = to.positions[i3 + 2] + to.worldOffset.z + this.scatterOffsets[i3 + 2] * scatterScaleVal * 5;
+          }
 
-        // Scatter: per-model override or default
-        const scatterScaleVal = enterTr?.scatterScale ?? particleConfig.scatterScale;
-        const scatterAmount = Math.sin(phase.t * Math.PI) * scatterScaleVal;
+          // to 위치 결정
+          let tX: number, tY: number, tZ: number;
+          if (i < toActive) {
+            tX = to.positions[i3] + to.worldOffset.x + (ths > 0 ? this.scatterOffsets[i3] * ths : 0);
+            tY = to.positions[i3 + 1] + to.worldOffset.y + (ths > 0 ? this.scatterOffsets[i3 + 1] * ths : 0);
+            tZ = to.positions[i3 + 2] + to.worldOffset.z + (ths > 0 ? this.scatterOffsets[i3 + 2] * ths : 0);
+          } else {
+            // to에 없음 → from 위치에서 scatter로 퇴장
+            tX = from.positions[i3] + from.worldOffset.x + this.scatterOffsets[i3] * scatterScaleVal * 5;
+            tY = from.positions[i3 + 1] + from.worldOffset.y + this.scatterOffsets[i3 + 1] * scatterScaleVal * 5;
+            tZ = from.positions[i3 + 2] + from.worldOffset.z + this.scatterOffsets[i3 + 2] * scatterScaleVal * 5;
+          }
 
-        baseX = lerpX + this.scatterOffsets[i3] * scatterAmount;
-        baseY = lerpY + this.scatterOffsets[i3 + 1] * scatterAmount;
-        baseZ = lerpZ + this.scatterOffsets[i3 + 2] * scatterAmount;
+          // Lerp between shapes
+          const lerpX = fX + (tX - fX) * t;
+          const lerpY = fY + (tY - fY) * t;
+          const lerpZ = fZ + (tZ - fZ) * t;
 
-        // Gravity: during transition, lift particles to gravityHeight (fall happens in hold)
-        if (enterTr?.gravity) {
-          const gravH = enterTr.gravityHeight ?? 8;
-          // 전환 후반(t→1)에서 파티클이 높이 위치하도록
-          baseY += gravH * t;
+          // Scatter: per-model override or default
+          const scatterAmount = Math.sin(phase.t * Math.PI) * scatterScaleVal;
+
+          baseX = lerpX + this.scatterOffsets[i3] * scatterAmount;
+          baseY = lerpY + this.scatterOffsets[i3 + 1] * scatterAmount;
+          baseZ = lerpZ + this.scatterOffsets[i3 + 2] * scatterAmount;
+
+          // Gravity: during transition, lift particles to gravityHeight (fall happens in hold)
+          if (enterTr?.gravity) {
+            const gravH = enterTr.gravityHeight ?? 8;
+            // 전환 후반(t→1)에서 파티클이 높이 위치하도록
+            baseY += gravH * t;
+          }
+
+          // Rotation around effective center during transition (skip if noRotation)
+          if (particleConfig.transitionRotation && !enterTr?.noRotation) {
+            const cx = effectiveCenter.x;
+            // Rotate around Y axis (relative to effective center)
+            const angle = phase.t * particleConfig.transitionRotationSpeed * Math.PI * 2;
+            const rx = baseX - cx;
+            const rz = baseZ;
+            const cosA = Math.cos(angle);
+            const sinA = Math.sin(angle);
+            baseX = cx + rx * cosA - rz * sinA;
+            baseZ = rx * sinA + rz * cosA;
+          }
         }
+      }
 
-        // Rotation around effective center during transition (skip if noRotation)
-        if (particleConfig.transitionRotation && !enterTr?.noRotation) {
-          const cx = effectiveCenter.x;
-          // Rotate around Y axis (relative to effective center)
-          const angle = phase.t * particleConfig.transitionRotationSpeed * Math.PI * 2;
-          const rx = baseX - cx;
-          const rz = baseZ;
-          const cosA = Math.cos(angle);
-          const sinA = Math.sin(angle);
-          baseX = cx + rx * cosA - rz * sinA;
-          baseZ = rx * sinA + rz * cosA;
-        }
+      // 비활성 파티클: 빠르게 sizeMul→0, 위치는 중심
+      if (isInactive) {
+        this.sizeMultipliers[i] += (0 - this.sizeMultipliers[i]) * 0.3;
+        this.currentPositions[i3] = baseX;
+        this.currentPositions[i3 + 1] = baseY;
+        this.currentPositions[i3 + 2] = baseZ;
+        continue;
       }
 
       // SpinTop rotation (팽이: spin + precession + nutation)
@@ -1186,6 +1271,15 @@ void main() {`
       let targetX = 0, targetY = 0, targetZ = 0;
       let hasTarget = false;
       let sizeMulTarget = 1.0;
+
+      // 전환 시 파티클 수 차이에 따른 size fade
+      if (phase.type === 'transition') {
+        const fromActive = this.shapeTargets[phase.fromIdx].activeCount;
+        const toActive = this.shapeTargets[phase.toIdx].activeCount;
+        const t = this.smoothstep(phase.t);
+        if (i >= fromActive) sizeMulTarget *= t;        // fade in (0→1)
+        if (i >= toActive) sizeMulTarget *= (1 - t);    // fade out (1→0)
+      }
 
       if (localMousePos) {
         const dx = baseX - localMousePos.x;
@@ -1235,7 +1329,7 @@ void main() {`
           if (particleConfig.mouseSizeEffect) {
             const baseBulge = 0.3;
             const sizeFactor = baseBulge + (1.0 - baseBulge) * activity;
-            sizeMulTarget = 1.0 + dome * particleConfig.mouseSizeStrength * sizeFactor;
+            sizeMulTarget *= 1.0 + dome * particleConfig.mouseSizeStrength * sizeFactor;
           }
         }
       }
@@ -1372,6 +1466,11 @@ void main() {`
       this.currentPositions[i3]     = baseX + this.mouseOffset[i3]     + orbitX;
       this.currentPositions[i3 + 1] = baseY + this.mouseOffset[i3 + 1] + orbitY;
       this.currentPositions[i3 + 2] = baseZ + this.mouseOffset[i3 + 2] + orbitZ;
+    }
+
+    // 비활성 파티클 (loopCount 이후): sizeMultiplier → 0으로 감쇠
+    for (let i = loopCount; i < this.particleCount; i++) {
+      this.sizeMultipliers[i] += (0 - this.sizeMultipliers[i]) * 0.3;
     }
 
     // Update geometry buffers

@@ -155,12 +155,11 @@ export function registerWalkingUpdater(
       positions[j * 3 + 2] = target.z * finalScale;
     }
 
-    // Fill padded positions (if particleCount > numSamples)
+    // 초과 파티클은 (0,0,0)으로 채움 (activeCount로 비활성 처리됨)
     for (let j = numSamples; j < totalParticles; j++) {
-      const src = (j % numSamples) * 3;
-      positions[j * 3] = positions[src];
-      positions[j * 3 + 1] = positions[src + 1];
-      positions[j * 3 + 2] = positions[src + 2];
+      positions[j * 3] = 0;
+      positions[j * 3 + 1] = 0;
+      positions[j * 3 + 2] = 0;
     }
   });
 
