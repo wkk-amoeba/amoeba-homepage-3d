@@ -1,4 +1,4 @@
-import { scrollConfig, introConfig, models } from '../config/sceneConfig';
+import { scrollConfig, introConfig, models, snapConfig } from '../config/sceneConfig';
 
 export type ScrollListener = (progress: number) => void;
 
@@ -20,7 +20,7 @@ function computeSectionBounds(): { start: number; end: number }[] {
 const sectionBoundsCache = computeSectionBounds();
 
 class ScrollManager {
-  private targetProgress = 0;  // 스크롤 이벤트의 즉시값
+  private targetProgress = 0;  // 스크롤 이벤트의 즉시값 (snap 시 애니메이션 대상)
   private progress = 0;        // 스무딩된 현재값 (렌더링에 사용)
   private smoothing = 0.05;    // lerp 속도 (0=정지, 1=즉시)
   private listeners: ScrollListener[] = [];
@@ -28,35 +28,221 @@ class ScrollManager {
   private introComplete = !introConfig.enabled; // 인트로 비활성이면 즉시 완료
   private introTextOpacity = 0; // 인트로 후 첫 섹션 텍스트 페이드인 진행
 
+  // --- Snap state ---
+  private snapEnabled = false;
+  private snapPoints: number[] = [];
+  private currentSnapIndex = 0;
+  private isSnapping = false;
+  private snapStartTime = 0;
+  private snapStartProgress = 0;
+  private snapEndProgress = 0;
+  private snapDuration = 1.2;
+
+  // Wheel accumulation
+  private wheelAccum = 0;
+  private wheelCooldown = 0;
+
+  // Touch tracking
+  private touchStartY = 0;
+  private touchStartTime = 0;
+
   constructor() {
-    this.handleScroll = this.handleScroll.bind(this);
+    this.handleWheel = this.handleWheel.bind(this);
+    this.handleTouchStart = this.handleTouchStart.bind(this);
+    this.handleTouchMove = this.handleTouchMove.bind(this);
+    this.handleTouchEnd = this.handleTouchEnd.bind(this);
+    this.handleKeyDown = this.handleKeyDown.bind(this);
+    this.handleNativeScroll = this.handleNativeScroll.bind(this);
+
     window.addEventListener('intro-complete', () => {
       this.introComplete = true;
+      if (snapConfig.enabled) {
+        this.activateSnap();
+      }
     });
+
+    // If intro is disabled and snap is enabled, activate snap immediately after init
+    if (!introConfig.enabled && snapConfig.enabled) {
+      // Will be called in init() after content element is set
+    }
   }
 
   init(contentSelector = '#content') {
     this.contentElement = document.querySelector(contentSelector);
-    window.addEventListener('scroll', this.handleScroll, { passive: true });
-    this.handleScroll();
+
+    // Wheel interception (non-passive to allow preventDefault when snap active)
+    window.addEventListener('wheel', this.handleWheel, { passive: false });
+
+    // Touch interception
+    window.addEventListener('touchstart', this.handleTouchStart, { passive: true });
+    window.addEventListener('touchmove', this.handleTouchMove, { passive: false });
+    window.addEventListener('touchend', this.handleTouchEnd, { passive: true });
+
+    // Keyboard
+    window.addEventListener('keydown', this.handleKeyDown);
+
+    // Native scroll fallback (for intro period before snap activates)
+    window.addEventListener('scroll', this.handleNativeScroll, { passive: true });
+
+    this.handleNativeScroll();
     // 초기 위치는 즉시 동기화
     this.progress = this.targetProgress;
+
+    // If intro disabled, activate snap immediately
+    if (!introConfig.enabled && snapConfig.enabled) {
+      this.activateSnap();
+    }
   }
 
-  private handleScroll() {
+  // Native scroll handler — only used before snap activates
+  private handleNativeScroll() {
+    if (this.snapEnabled) return; // snap이 활성화되면 native scroll 무시
     if (!this.contentElement) return;
     const scrollHeight = this.contentElement.scrollHeight - window.innerHeight;
     this.targetProgress = Math.min(1, Math.max(0, window.scrollY / scrollHeight));
   }
 
+  // --- Wheel handler with threshold accumulation ---
+  private handleWheel(e: WheelEvent) {
+    if (!this.snapEnabled) {
+      // Snap 비활성 (인트로 중) — native scroll 허용
+      return;
+    }
+
+    e.preventDefault(); // Native scroll 차단
+
+    if (this.isSnapping || this.wheelCooldown > 0) return;
+
+    this.wheelAccum += e.deltaY;
+
+    if (Math.abs(this.wheelAccum) >= snapConfig.wheelThreshold) {
+      const direction = this.wheelAccum > 0 ? 1 : -1;
+      this.wheelAccum = 0;
+      this.snapTo(this.currentSnapIndex + direction);
+    }
+  }
+
+  // --- Touch handlers ---
+  private handleTouchStart(e: TouchEvent) {
+    this.touchStartY = e.touches[0].clientY;
+    this.touchStartTime = performance.now();
+  }
+
+  private handleTouchMove(e: TouchEvent) {
+    if (this.snapEnabled) e.preventDefault(); // Native scroll 차단
+  }
+
+  private handleTouchEnd(e: TouchEvent) {
+    if (!this.snapEnabled || this.isSnapping) return;
+
+    const dy = this.touchStartY - e.changedTouches[0].clientY; // 양수 = 위로 스와이프 (다음 씬)
+    const dt = performance.now() - this.touchStartTime;
+    const velocity = dt > 0 ? Math.abs(dy / dt) : 0; // px/ms
+
+    // 충분한 거리 또는 속도면 트리거
+    if (Math.abs(dy) > snapConfig.touchThreshold || velocity > 0.5) {
+      const direction = dy > 0 ? 1 : -1;
+      this.snapTo(this.currentSnapIndex + direction);
+    }
+  }
+
+  // --- Keyboard handler ---
+  private handleKeyDown(e: KeyboardEvent) {
+    if (!this.snapEnabled || this.isSnapping) return;
+
+    if (e.key === 'ArrowDown' || e.key === ' ' || e.key === 'PageDown') {
+      e.preventDefault();
+      this.snapTo(this.currentSnapIndex + 1);
+    } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+      e.preventDefault();
+      this.snapTo(this.currentSnapIndex - 1);
+    }
+  }
+
+  // --- Snap logic ---
+  private snapTo(index: number) {
+    const clamped = Math.max(0, Math.min(this.snapPoints.length - 1, index));
+    if (clamped === this.currentSnapIndex && !this.isSnapping) return;
+
+    this.currentSnapIndex = clamped;
+    this.isSnapping = true;
+    this.snapStartTime = performance.now();
+    this.snapStartProgress = this.progress; // 현재 스무딩된 위치에서 출발
+    this.snapEndProgress = this.snapPoints[clamped];
+
+    // 거리에 비례한 전환 시간 (1.5~2.5초)
+    const distance = Math.abs(this.snapEndProgress - this.snapStartProgress);
+    this.snapDuration = Math.max(snapConfig.transitionDuration, Math.min(2.5, distance * 12));
+
+    this.wheelAccum = 0;
+  }
+
+  private activateSnap() {
+    this.snapEnabled = true;
+    this.snapPoints = snapConfig.points.map(p => p.progress);
+
+    // 현재 progress에 가장 가까운 snap point 찾기
+    let nearest = 0;
+    let minDist = Infinity;
+    for (let i = 0; i < this.snapPoints.length; i++) {
+      const d = Math.abs(this.progress - this.snapPoints[i]);
+      if (d < minDist) { minDist = d; nearest = i; }
+    }
+    this.currentSnapIndex = nearest;
+
+    // Native scroll 차단
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+
+    // 가장 가까운 snap point로 즉시 이동
+    this.snapTo(nearest);
+  }
+
+  private syncScrollPosition() {
+    if (!this.contentElement) return;
+    const scrollHeight = this.contentElement.scrollHeight - window.innerHeight;
+    const targetScrollY = this.targetProgress * scrollHeight;
+    window.scrollTo({ top: targetScrollY, behavior: 'instant' as ScrollBehavior });
+  }
+
+  private easeInOutCubic(t: number): number {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  }
+
   /** 매 프레임 호출 — progress를 target으로 부드럽게 보간 */
   tick() {
+    // Snap 애니메이션 구동
+    if (this.isSnapping) {
+      const elapsed = (performance.now() - this.snapStartTime) / 1000;
+      const t = Math.min(1, elapsed / this.snapDuration);
+      const eased = this.easeInOutCubic(t);
+
+      this.targetProgress = this.snapStartProgress +
+        (this.snapEndProgress - this.snapStartProgress) * eased;
+
+      if (t >= 1) {
+        this.isSnapping = false;
+        this.targetProgress = this.snapEndProgress;
+        this.wheelCooldown = 0.3; // 착지 후 짧은 쿨다운
+      }
+
+      this.syncScrollPosition();
+    }
+
+    // Lerp smoothing (snap 중에는 빠르게 추적)
     const diff = this.targetProgress - this.progress;
     if (Math.abs(diff) < 0.0001) {
       this.progress = this.targetProgress;
     } else {
-      this.progress += diff * this.smoothing;
+      const smoothing = this.isSnapping ? 0.12 : this.smoothing;
+      this.progress += diff * smoothing;
     }
+
+    // Cooldown 감소 (~60fps 가정)
+    if (this.wheelCooldown > 0) {
+      this.wheelCooldown -= 1 / 60;
+    }
+
     this.listeners.forEach(fn => fn(this.progress));
     this.updateUI();
   }
@@ -195,7 +381,17 @@ class ScrollManager {
   }
 
   destroy() {
-    window.removeEventListener('scroll', this.handleScroll);
+    window.removeEventListener('wheel', this.handleWheel);
+    window.removeEventListener('touchstart', this.handleTouchStart);
+    window.removeEventListener('touchmove', this.handleTouchMove);
+    window.removeEventListener('touchend', this.handleTouchEnd);
+    window.removeEventListener('keydown', this.handleKeyDown);
+    window.removeEventListener('scroll', this.handleNativeScroll);
+
+    // overflow 복원
+    document.documentElement.style.overflow = '';
+    document.body.style.overflow = '';
+
     this.listeners = [];
   }
 }

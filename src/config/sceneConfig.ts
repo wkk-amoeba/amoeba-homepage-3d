@@ -172,7 +172,7 @@ export const snapConfig = {
     { name: 'Scene04', progress: 0.625 },    // Human hold 중앙
     { name: 'Scene05', progress: 0.875 },    // City3 hold 중앙
   ],
-  transitionDuration: 1.2,   // 기본 전환 시간 (초), 거리에 따라 조절됨
+  transitionDuration: 1.5,   // 기본 전환 시간 (초), 거리에 따라 조절됨
   wheelThreshold: 50,        // 휠 누적 delta 트리거 기준
   touchThreshold: 50,        // 터치 스와이프 px 기준
 };
