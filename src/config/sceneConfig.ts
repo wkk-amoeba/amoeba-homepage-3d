@@ -66,10 +66,10 @@ export interface ModelData {
 // 3D 모델 정의
 // geometry가 있으면 프로그래밍 생성, modelPath가 있으면 GLB .bin 로드 -1.5, 0.3, 0
 export const models: ModelData[] = [
-  { id: 0, name: 'Sphere', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [0, 0, 0], holdScatter: 0.015, sectionSpan: 3, depthSize: { min: 0.1, max: 0.7 }, lighting: { ambient: 0.15, diffuse: 0.4 } },
-  { id: 1, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.4, position: [0, 0, 0], holdScatter: 0.01, radialSize: { min: 0.5, max: 1.0 }, spinTop: { tilt: 0, spinSpeed: 0.3, precessionSpeed: 0.4, nutationAmp: 0.2443, nutationSpeed: 1.5 }, enterTransition: { noRotation: true, scatterScale: 0 } },
-  { id: 2, name: 'Human', scale: 0.35, position: [0, -1.4, 0], holdScatter: 0.006 },  // precomputedPositions는 런타임에 주입
-  { id: 3, name: 'City3', modelPath: '/models/city_23_high.glb', scale: 1.0, mobileScale: 0.85, position: [0, -1, 0], particleCount: 50000, heightSize: { min: 0.05, max: 0.8, mobileMin: 0.2 }, autoRotateSpeed: -0.3, enterTransition: { noRotation: true, gravity: true, gravityHeight: 3.5, gravityDuration: 5.0, gravityWobbleFreq: 10.0, scatterScale: 0.08 } },
+  { id: 0, name: 'Sphere', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [0, 0, 0], holdScatter: 0.015, sectionSpan: 3, depthSize: { min: 0.1, max: 0.7 }, lighting: { ambient: 0.15, diffuse: 0.4, specular: 1.0, shininess: 2.0 }, },
+  { id: 1, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.4, position: [0, 0, 0], holdScatter: 0.01, sectionSpan: 1, radialSize: { min: 0.5, max: 1.0 }, spinTop: { tilt: 0, spinSpeed: 0.3, precessionSpeed: 0.4, nutationAmp: 0.2443, nutationSpeed: 1.5 }, enterTransition: { noRotation: false, scatterScale: 0.03 }, lighting: { ambient: 0.1, diffuse: 0.3, specular: 0, shininess: 2.0 } },
+  { id: 2, name: 'Human', scale: 0.35, position: [0, -1.4, 0], holdScatter: 0.006, lighting: { ambient: 0.05, diffuse: 0.2, specular: 0, shininess: 2.0 } },  // precomputedPositions는 런타임에 주입
+  { id: 3, name: 'City3', modelPath: '/models/city_23_high.glb', scale: 1.0, mobileScale: 0.85, position: [0, -1, 0], particleCount: 50000, heightSize: { min: 0.05, max: 0.8, mobileMin: 0.2 }, autoRotateSpeed: -0.3, enterTransition: { noRotation: true, gravity: true, gravityHeight: 3.5, gravityDuration: 5.0, gravityWobbleFreq: 10.0, scatterScale: 0.08 }, lighting: { ambient: 0.05, diffuse: 0.2, specular: 0, shininess: 2.0 } },
 ];
 
 // 파티클 렌더링 모드
@@ -85,8 +85,8 @@ export const particleConfig = {
   activationRadius: 2.0,   // 마우스 근접 시 효과 활성 반경 (월드 유닛)
   mouseAttract: false,     // true=마우스로 모임(attract), false=밀어냄(scatter)
   mouseStrength: 0.5,      // 마우스 인터랙션 강도
-  microNoiseAmp: 0.007,    // 파티클 미세 공전 반지름 (0 = 비활성)
-  microNoiseSpeed: 3.0,    // 미세 공전 속도 (rad/s)
+  microNoiseAmp: 0.1,    // 파티클 미세 공전 반지름 (0 = 비활성)
+  microNoiseSpeed: 0.05,    // 미세 공전 속도 (rad/s)
   tetrahedronSize: 0.06,   // 삼각뿔 인스턴스 크기
   tetrahedronRotationSpeed: 0.5, // 삼각뿔 회전 속도 (rad/s)
   // 스프링 물리 (마우스 마그넷)
@@ -132,9 +132,9 @@ export const scrollConfig = {
 
 // 애니메이션 페이즈 설정 (진입 → 고정 → 퇴장)
 export const animationPhases = {
-  enterRatio: 0.2,   // 진입: 20%
-  holdRatio: 0.6,    // 고정: 60%
-  exitRatio: 0.2,    // 퇴장: 20%
+  enterRatio: 0.3,   // 진입: 30%
+  holdRatio: 0.4,    // 고정: 40%  microNoiseAmp: 0.1를 키우면 원하는 형태에 가까운
+  exitRatio: 0.3,    // 퇴장: 30%
 };
 
 // 인트로 애니메이션 설정 (페이지 로드 시 파티클이 모여서 첫 오브젝트 형성)
@@ -153,7 +153,7 @@ export const backgroundConfig = {
   radius: 8,             // 원통 반경
   height: 8,             // 원통 높이 (Y축)
   minRadius: 1,          // 카메라 근처 빈 영역
-  size: 0.03,
+  size: 0.04,
   opacity: 1,
   rotationSpeed: 0.02,
   exclusionRadius: 0,   // 오브젝트 실루엣 제외 반경 (NDC 단위)

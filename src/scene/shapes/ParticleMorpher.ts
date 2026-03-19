@@ -184,6 +184,16 @@ export class ParticleMorpher {
     this.lightShininessUniform.value = v;
   }
 
+  /** 현재 적용 중인 라이팅 uniform 값 (디버그용) */
+  getCurrentLighting() {
+    return {
+      ambient: this.lightAmbientUniform.value,
+      diffuse: this.lightDiffuseUniform.value,
+      specular: this.lightSpecularUniform.value,
+      shininess: this.lightShininessUniform.value,
+    };
+  }
+
   /** Register a per-frame updater for a shape (e.g., animated FBX walking) */
   setShapeUpdater(shapeIdx: number, updater: (delta: number, scrollProgress: number) => void) {
     this.shapeUpdaters.set(shapeIdx, updater);
@@ -886,6 +896,14 @@ void main() {`
     let activeHeightSize: ShapeTarget['heightSize'] = undefined;
     let activeRadialSize: ShapeTarget['radialSize'] = undefined;
     let activeDepthSize: ShapeTarget['depthSize'] = undefined;
+    // Transition blending: from/to size configs + blend factor
+    let transFromDepthSize: ShapeTarget['depthSize'] = undefined;
+    let transToDepthSize: ShapeTarget['depthSize'] = undefined;
+    let transFromRadialSize: ShapeTarget['radialSize'] = undefined;
+    let transToRadialSize: ShapeTarget['radialSize'] = undefined;
+    let transFromHeightSize: ShapeTarget['heightSize'] = undefined;
+    let transToHeightSize: ShapeTarget['heightSize'] = undefined;
+    let transSizeBlend = 0; // 0=fully from, 1=fully to
     if (phase.type === 'hold') {
       const shape = this.shapeTargets[phase.shapeIdx];
       effectiveCenter = shape.worldOffset;
@@ -900,6 +918,14 @@ void main() {`
       effectiveCenter = new THREE.Vector3().lerpVectors(from.worldOffset, to.worldOffset, phase.t);
       this.localZMinUniform.value = THREE.MathUtils.lerp(from.zMin, to.zMin, phase.t);
       this.localZMaxUniform.value = THREE.MathUtils.lerp(from.zMax, to.zMax, phase.t);
+      // Store both from/to size configs for per-particle blending
+      transFromDepthSize = from.depthSize;
+      transToDepthSize = to.depthSize;
+      transFromRadialSize = from.radialSize;
+      transToRadialSize = to.radialSize;
+      transFromHeightSize = from.heightSize;
+      transToHeightSize = to.heightSize;
+      transSizeBlend = phase.t;
     }
     this.shapeCenterUniform.value.copy(effectiveCenter);
     this._effectiveCenter.set(
@@ -986,6 +1012,28 @@ void main() {`
         stm11 = ct;
         stm12 = st2 * ss;
         // Row 2
+        stm20 = -sp * ct * cs - cp * ss;
+        stm21 = sp * st2;
+        stm22 = -sp * ct * ss + cp * cs;
+      }
+    } else if (phase.type === 'transition') {
+      // Blend spinTop rotation during transition (identity → full rotation)
+      const toSt = this.shapeTargets[phase.toIdx].spinTop;
+      if (toSt) {
+        spinTopShapeIdx = phase.toIdx;
+        const blendT = phase.t; // 0→1 over full transition
+        const tilt = (toSt.tilt + (toSt.nutationAmp > 0 ? Math.sin(this.precessionAngles[phase.toIdx] * toSt.nutationSpeed / toSt.precessionSpeed) * toSt.nutationAmp : 0)) * blendT;
+        const spinA = this.spinAngles[phase.toIdx] * blendT;
+        const precA = this.precessionAngles[phase.toIdx] * blendT;
+        const cp = Math.cos(precA), sp = Math.sin(precA);
+        const ct = Math.cos(tilt), st2 = Math.sin(tilt);
+        const cs = Math.cos(spinA), ss = Math.sin(spinA);
+        stm00 = cp * ct * cs - sp * ss;
+        stm01 = -cp * st2;
+        stm02 = cp * ct * ss + sp * cs;
+        stm10 = st2 * cs;
+        stm11 = ct;
+        stm12 = st2 * ss;
         stm20 = -sp * ct * cs - cp * ss;
         stm21 = sp * st2;
         stm22 = -sp * ct * ss + cp * cs;
@@ -1192,18 +1240,40 @@ void main() {`
         }
       }
 
-      // Height-based size effect
+      // Height-based size effect (with transition blending)
       if (activeHeightSize) {
-        const y = baseY - effectiveCenter.y; // local Y (relative to shape center)
+        const y = baseY - effectiveCenter.y;
         const normalizedY = (y - activeHeightSize.yMin) / (activeHeightSize.yMax - activeHeightSize.yMin || 1);
         const clampedY = Math.max(0, Math.min(1, normalizedY));
         const isMobile = window.innerWidth < 768;
         const minVal = (isMobile && activeHeightSize.mobileMin !== undefined) ? activeHeightSize.mobileMin : activeHeightSize.min;
         const heightMul = minVal + (activeHeightSize.max - minVal) * clampedY;
         sizeMulTarget *= heightMul;
+      } else if (phase.type === 'transition') {
+        // Blend from/to heightSize during transition
+        let heightBlend = 1.0;
+        if (transFromHeightSize) {
+          const y = baseY - effectiveCenter.y;
+          const normalizedY = (y - transFromHeightSize.yMin) / (transFromHeightSize.yMax - transFromHeightSize.yMin || 1);
+          const clampedY = Math.max(0, Math.min(1, normalizedY));
+          const isMobile = window.innerWidth < 768;
+          const minVal = (isMobile && transFromHeightSize.mobileMin !== undefined) ? transFromHeightSize.mobileMin : transFromHeightSize.min;
+          const fromMul = minVal + (transFromHeightSize.max - minVal) * clampedY;
+          heightBlend *= 1.0 + (fromMul - 1.0) * (1 - transSizeBlend); // fade out
+        }
+        if (transToHeightSize) {
+          const y = baseY - effectiveCenter.y;
+          const normalizedY = (y - transToHeightSize.yMin) / (transToHeightSize.yMax - transToHeightSize.yMin || 1);
+          const clampedY = Math.max(0, Math.min(1, normalizedY));
+          const isMobile = window.innerWidth < 768;
+          const minVal = (isMobile && transToHeightSize.mobileMin !== undefined) ? transToHeightSize.mobileMin : transToHeightSize.min;
+          const toMul = minVal + (transToHeightSize.max - minVal) * clampedY;
+          heightBlend *= 1.0 + (toMul - 1.0) * transSizeBlend; // fade in
+        }
+        sizeMulTarget *= heightBlend;
       }
 
-      // Radial distance-based size effect (중심축에 가까울수록 작게)
+      // Radial distance-based size effect (중심축에 가까울수록 작게, with transition blending)
       if (activeRadialSize) {
         const rx = baseX - effectiveCenter.x;
         const rz = baseZ - effectiveCenter.z;
@@ -1211,15 +1281,51 @@ void main() {`
         const normalizedR = Math.min(1, radialDist / (activeRadialSize.maxRadius || 1));
         const radialMul = activeRadialSize.min + (activeRadialSize.max - activeRadialSize.min) * normalizedR;
         sizeMulTarget *= radialMul;
+      } else if (phase.type === 'transition') {
+        let radialBlend = 1.0;
+        if (transFromRadialSize) {
+          const rx = baseX - effectiveCenter.x;
+          const rz = baseZ - effectiveCenter.z;
+          const radialDist = Math.sqrt(rx * rx + rz * rz);
+          const normalizedR = Math.min(1, radialDist / (transFromRadialSize.maxRadius || 1));
+          const fromMul = transFromRadialSize.min + (transFromRadialSize.max - transFromRadialSize.min) * normalizedR;
+          radialBlend *= 1.0 + (fromMul - 1.0) * (1 - transSizeBlend);
+        }
+        if (transToRadialSize) {
+          const rx = baseX - effectiveCenter.x;
+          const rz = baseZ - effectiveCenter.z;
+          const radialDist = Math.sqrt(rx * rx + rz * rz);
+          const normalizedR = Math.min(1, radialDist / (transToRadialSize.maxRadius || 1));
+          const toMul = transToRadialSize.min + (transToRadialSize.max - transToRadialSize.min) * normalizedR;
+          radialBlend *= 1.0 + (toMul - 1.0) * transSizeBlend;
+        }
+        sizeMulTarget *= radialBlend;
       }
 
-      // Depth (Z) based size effect (먼쪽=min, 가까운쪽=max)
+      // Depth (Z) based size effect (먼쪽=min, 가까운쪽=max, with transition blending)
       if (activeDepthSize) {
         const z = baseZ - effectiveCenter.z;
         const normalizedZ = (z - activeDepthSize.zMin) / (activeDepthSize.zMax - activeDepthSize.zMin || 1);
         const clampedZ = Math.max(0, Math.min(1, normalizedZ));
         const depthMul = activeDepthSize.min + (activeDepthSize.max - activeDepthSize.min) * clampedZ;
         sizeMulTarget *= depthMul;
+      } else if (phase.type === 'transition') {
+        let depthBlend = 1.0;
+        if (transFromDepthSize) {
+          const z = baseZ - effectiveCenter.z;
+          const normalizedZ = (z - transFromDepthSize.zMin) / (transFromDepthSize.zMax - transFromDepthSize.zMin || 1);
+          const clampedZ = Math.max(0, Math.min(1, normalizedZ));
+          const fromMul = transFromDepthSize.min + (transFromDepthSize.max - transFromDepthSize.min) * clampedZ;
+          depthBlend *= 1.0 + (fromMul - 1.0) * (1 - transSizeBlend);
+        }
+        if (transToDepthSize) {
+          const z = baseZ - effectiveCenter.z;
+          const normalizedZ = (z - transToDepthSize.zMin) / (transToDepthSize.zMax - transToDepthSize.zMin || 1);
+          const clampedZ = Math.max(0, Math.min(1, normalizedZ));
+          const toMul = transToDepthSize.min + (transToDepthSize.max - transToDepthSize.min) * clampedZ;
+          depthBlend *= 1.0 + (toMul - 1.0) * transSizeBlend;
+        }
+        sizeMulTarget *= depthBlend;
       }
 
       // Smooth size multiplier

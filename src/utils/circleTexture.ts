@@ -14,8 +14,12 @@ export function getCircleTexture(): THREE.Texture {
   const center = size / 2;
   const radius = size / 2 - 2;
 
-  // Draw hard edge circle
-  ctx.fillStyle = 'white';
+  // Draw soft-edge circle with radial gradient for smooth appearance at small sizes
+  const gradient = ctx.createRadialGradient(center, center, 0, center, center, radius);
+  gradient.addColorStop(0, 'rgba(255,255,255,1)');
+  gradient.addColorStop(0.7, 'rgba(255,255,255,1)');
+  gradient.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gradient;
   ctx.beginPath();
   ctx.arc(center, center, radius, 0, Math.PI * 2);
   ctx.fill();

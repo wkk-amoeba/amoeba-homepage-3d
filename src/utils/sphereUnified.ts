@@ -310,6 +310,10 @@ export interface UnifiedSphereConfig {
   deformHoldScatter: number;
   orbitalHoldScatter: number;
   orbital2HoldScatter: number;
+  // Per-sub-effect lighting override
+  deformLighting?: { ambient?: number; diffuse?: number; specular?: number; shininess?: number };
+  orbitalLighting?: { ambient?: number; diffuse?: number; specular?: number; shininess?: number };
+  orbital2Lighting?: { ambient?: number; diffuse?: number; specular?: number; shininess?: number };
 }
 
 let activeUnifiedConfig: UnifiedSphereConfig | null = null;
@@ -321,7 +325,7 @@ export function getActiveUnifiedConfig(): UnifiedSphereConfig | null {
 
 export function registerUnifiedSphere(
   morpher: {
-    getShapeTargets: () => { positions: Float32Array; holdScatter: number }[];
+    getShapeTargets: () => { positions: Float32Array; holdScatter: number; lighting?: { ambient?: number; diffuse?: number; specular?: number; shininess?: number } }[];
     setShapeUpdater: (idx: number, fn: (delta: number, scrollProgress: number) => void) => void;
     getSectionBounds: (idx: number) => { start: number; end: number } | null;
   },
@@ -360,21 +364,25 @@ export function registerUnifiedSphere(
       threshold: 0.5,
     },
     orbital2: {
-      mainRadius: 0.7,
+      mainRadius: 0.85, //0.7
       bobAmplitude: 0.75,
       bobSpeed: 1.1,
       satelliteCount: 5,
       satelliteRadius: 0.2,
-      travelDistance: 1.5,
+      travelDistance: 1.9, //1.5
       travelSpeed: 0.8,
       threshold: 1.05,
     },
     transitionWidth: 0.1, // 10% of local progress for blending
     subSection1: 0.2,     // deform ends at 20% → orbital starts
-    subSection2: 0.4,     // orbital ends at 40% → orbital2 holds 60%
+    subSection2: 0.4,     // orbital ends at 40% → orbital2(위성) holds 60%
     deformHoldScatter: 0,
     orbitalHoldScatter: 0.015,
     orbital2HoldScatter: 0.001,
+    // 서브 섹션별 조명 (4속성 모두 명시하여 프레임 간 값 잔존 방지)
+    deformLighting:  { ambient: 0.15, diffuse: 0.4, specular: 1.0, shininess: 2.0 },
+    orbitalLighting: { ambient: 0.15, diffuse: 0.4, specular: 0, shininess: 2.0 },
+    orbital2Lighting: { ambient: 10, diffuse: 0.1, specular: 0, shininess: 2.0 }, //전체 밝기, 확산광도, 핀 조명 0이면 번쩍이는 반사효과 제거, 집중도 높을 수록 날카로운 하이라이트 
   };
 
   const positions = shape.positions;
@@ -439,6 +447,46 @@ export function registerUnifiedSphere(
       shape.holdScatter = config.orbitalHoldScatter * (1 - t) + config.orbital2HoldScatter * t;
     } else {
       shape.holdScatter = config.orbital2HoldScatter;
+    }
+
+    // Dynamically set lighting based on active sub-section
+    // 매 프레임 새 객체로 설정하여 이전 프레임 값 잔존 방지
+    {
+      const dLt = config.deformLighting;
+      const oLt = config.orbitalLighting;
+      const o2Lt = config.orbital2Lighting;
+
+      if (dLt || oLt || o2Lt) {
+        const lerpVal = (a: number, b: number, t: number) => a + (b - a) * t;
+
+        let targetLt: { ambient: number; diffuse: number; specular: number; shininess: number };
+
+        if (localProgress < S1 - tw) {
+          targetLt = { ...dLt! } as typeof targetLt;
+        } else if (localProgress < S1 + tw) {
+          const t = (localProgress - (S1 - tw)) / (2 * tw);
+          targetLt = {
+            ambient: lerpVal(dLt!.ambient!, oLt!.ambient!, t),
+            diffuse: lerpVal(dLt!.diffuse!, oLt!.diffuse!, t),
+            specular: lerpVal(dLt!.specular!, oLt!.specular!, t),
+            shininess: lerpVal(dLt!.shininess!, oLt!.shininess!, t),
+          };
+        } else if (localProgress < S2 - tw) {
+          targetLt = { ...oLt! } as typeof targetLt;
+        } else if (localProgress < S2 + tw) {
+          const t = (localProgress - (S2 - tw)) / (2 * tw);
+          targetLt = {
+            ambient: lerpVal(oLt!.ambient!, o2Lt!.ambient!, t),
+            diffuse: lerpVal(oLt!.diffuse!, o2Lt!.diffuse!, t),
+            specular: lerpVal(oLt!.specular!, o2Lt!.specular!, t),
+            shininess: lerpVal(oLt!.shininess!, o2Lt!.shininess!, t),
+          };
+        } else {
+          targetLt = { ...o2Lt! } as typeof targetLt;
+        }
+
+        shape.lighting = targetLt;
+      }
     }
 
     // Determine active effect(s) and blend factor

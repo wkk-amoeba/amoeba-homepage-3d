@@ -5,6 +5,7 @@ import { getActiveUnifiedConfig } from '../utils/sphereUnified';
 
 export class DebugPanel {
   private gui: GUI;
+  private animFrameId: number | null = null;
 
   constructor(sceneManager: SceneManager) {
     this.gui = new GUI({ title: 'Particle Debug' });
@@ -370,9 +371,42 @@ export class DebugPanel {
     this.gui.add({ particles: morpher.totalParticleCount }, 'particles')
       .name('Total Particles')
       .disable();
+
+    // Live Lighting Monitor — 현재 적용 중인 라이팅 uniform 값 실시간 표시
+    const liveFolder = this.gui.addFolder('Live Lighting');
+    const liveParams = {
+      ambient: 0,
+      diffuse: 0,
+      specular: 0,
+      shininess: 0,
+    };
+    const ambCtrl = liveFolder.add(liveParams, 'ambient', 0, 10, 0.01).name('Ambient').disable();
+    const difCtrl = liveFolder.add(liveParams, 'diffuse', 0, 1, 0.01).name('Diffuse').disable();
+    const spcCtrl = liveFolder.add(liveParams, 'specular', 0, 2, 0.01).name('Specular').disable();
+    const shnCtrl = liveFolder.add(liveParams, 'shininess', 0, 128, 0.1).name('Shininess').disable();
+    liveFolder.open();
+
+    // 매 프레임 uniform 값 읽어서 표시
+    const updateLiveMonitor = () => {
+      const cur = morpher.getCurrentLighting();
+      if (liveParams.ambient !== cur.ambient || liveParams.diffuse !== cur.diffuse ||
+          liveParams.specular !== cur.specular || liveParams.shininess !== cur.shininess) {
+        liveParams.ambient = cur.ambient;
+        liveParams.diffuse = cur.diffuse;
+        liveParams.specular = cur.specular;
+        liveParams.shininess = cur.shininess;
+        ambCtrl.updateDisplay();
+        difCtrl.updateDisplay();
+        spcCtrl.updateDisplay();
+        shnCtrl.updateDisplay();
+      }
+      this.animFrameId = requestAnimationFrame(updateLiveMonitor);
+    };
+    updateLiveMonitor();
   }
 
   destroy() {
+    if (this.animFrameId !== null) cancelAnimationFrame(this.animFrameId);
     this.gui.destroy();
   }
 }

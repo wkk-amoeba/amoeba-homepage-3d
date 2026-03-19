@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { getCircleTexture } from '../../utils/circleTexture';
+
 import { ModelData, ParticleMode, scrollConfig, animationPhases, particleConfig, getParticleMultiplier, PERFORMANCE_CONFIG } from '../../config/sceneConfig';
 import { createShapePoints } from '../../utils/shapeGenerators';
 
@@ -434,8 +434,6 @@ export class ModelShape {
         sizeAttenuation: true,
         depthWrite: false,
         opacity: 0,
-        map: getCircleTexture(),
-        alphaMap: getCircleTexture(),
       });
 
       // Inject depth-based size multiplier + fake lighting into shaders
@@ -496,10 +494,13 @@ void main() {`
           }`
         );
 
-        // Fragment shader: add varying + apply brightness
+        // Fragment shader: add varying + circle shape via gl_PointCoord + apply brightness
         shader.fragmentShader = shader.fragmentShader.replace(
           'void main() {',
-          'varying float vBrightness;\nvoid main() {'
+          `varying float vBrightness;
+void main() {
+  float dist = length(gl_PointCoord - vec2(0.5));
+  if (dist > 0.5) discard;`
         );
         shader.fragmentShader = shader.fragmentShader.replace(
           '#include <opaque_fragment>',
