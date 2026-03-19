@@ -121,7 +121,7 @@ export const particleConfig = {
   scatterScale: 0.03,
   // 가짜 라이팅 (파티클 위치 기반 법선으로 명암)
   lightEnabled: true,
-  lightDirection: [-0.2, 0.2, 0.0] as [number, number, number],  // 광원 방향 (좌상단)
+  lightDirection: [-10, 10, 15.0] as [number, number, number],  // 광원 방향 (좌상단)
   lightAmbient: 0.05,            // 최소 밝기 (그림자 부분)
   lightDiffuse: 0.2,             // 확산광 강도
   lightSpecular: 1.0,            // 스페큘러 강도 (핀 조명 하이라이트)
@@ -160,6 +160,21 @@ export const introConfig = {
   delay: 0.3,             // 페이지 로드 후 대기 시간 (초)
   scatterDistance: [5, 15] as [number, number], // 흩어진 파티클 거리 범위
   rotationTurns: -9,    // 인트로 중 자전 회전수 (양수=반시계, 음수=시계)
+};
+
+// 스크롤 스냅 설정 — 각 씬의 hold 구간 중앙에 스냅
+export const snapConfig = {
+  enabled: true,
+  points: [
+    { name: 'Scene01', progress: 0.025 },   // Sphere deform (localProgress ~0.1)
+    { name: 'Scene02', progress: 0.15 },     // Sphere orbital2/satellite (localProgress ~0.6)
+    { name: 'Scene03', progress: 0.375 },    // Gyro hold 중앙
+    { name: 'Scene04', progress: 0.625 },    // Human hold 중앙
+    { name: 'Scene05', progress: 0.875 },    // City3 hold 중앙
+  ],
+  transitionDuration: 1.2,   // 기본 전환 시간 (초), 거리에 따라 조절됨
+  wheelThreshold: 50,        // 휠 누적 delta 트리거 기준
+  touchThreshold: 50,        // 터치 스와이프 px 기준
 };
 
 // 배경 파티클 설정 (원통형 분포 → Y축 회전 시 균일)

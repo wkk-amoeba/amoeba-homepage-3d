@@ -384,7 +384,7 @@ export function registerUnifiedSphere(
     orbitalHoldScatter: 0.015,
     orbital2HoldScatter: 0.001,
     // 서브 섹션별 조명 (4속성 모두 명시하여 프레임 간 값 잔존 방지)
-    deformLighting:  { ambient: 0.15, diffuse: 0.4, specular: 1.0, shininess: 2.0 },
+    deformLighting:  { ambient: 0.1, diffuse: 3.0, specular: 10, shininess: 20.0 },
     orbitalLighting: { ambient: 0.15, diffuse: 0.4, specular: 0, shininess: 2.0 },
     orbital2Lighting: { ambient: 10, diffuse: 0.1, specular: 0, shininess: 2.0 }, //전체 밝기, 확산광도, 핀 조명 0이면 번쩍이는 반사효과 제거, 집중도 높을 수록 날카로운 하이라이트 
   };
