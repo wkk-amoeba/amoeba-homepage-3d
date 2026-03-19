@@ -39,7 +39,7 @@ export class ParticleBackground {
 
     const material = new THREE.PointsMaterial({
       transparent: true,
-      color: 0x000000,
+      color: 0xffffff,
       size: backgroundConfig.size * 2,
       sizeAttenuation: true,
       depthWrite: false,

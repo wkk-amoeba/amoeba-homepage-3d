@@ -458,7 +458,7 @@ export class ParticleMorpher {
 
     const material = new THREE.PointsMaterial({
       transparent: true,
-      color: 0x000000,
+      color: 0xffffff,
       size: particleConfig.size,
       sizeAttenuation: true,
       depthWrite: false,
