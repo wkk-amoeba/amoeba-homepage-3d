@@ -15,6 +15,7 @@ interface ShapeTarget {
   depthSize?: { min: number; max: number; zMin: number; zMax: number }; // Z 깊이 기반 크기
   spinTop?: { tilt: number; spinSpeed: number; precessionSpeed: number; nutationAmp: number; nutationSpeed: number };
   autoRotateSpeed?: number; // 모델별 자전 속도 오버라이드
+  lighting?: { ambient?: number; diffuse?: number; specular?: number; shininess?: number };
   enterTransition?: { noRotation?: boolean; gravity?: boolean; gravityHeight?: number; gravityDuration?: number; gravityWobbleFreq?: number; scatterScale?: number };
 }
 
@@ -377,6 +378,7 @@ export class ParticleMorpher {
         depthSize: depthSizeData,
         spinTop: spinTopData,
         autoRotateSpeed: config.autoRotateSpeed,
+        lighting: config.lighting,
         enterTransition: config.enterTransition,
       });
     }
@@ -669,6 +671,48 @@ void main() {`
       if (rotSpeed !== 0) {
         this.autoRotateAngle += rotSpeed * delta;
       }
+    }
+
+    // Per-shape lighting override (smooth lerp)
+    {
+      const phase = this.getPhase(scrollProgress);
+      let targetAmbient = particleConfig.lightAmbient;
+      let targetDiffuse = particleConfig.lightDiffuse;
+      let targetSpecular = particleConfig.lightSpecular;
+      let targetShininess = particleConfig.lightShininess;
+
+      const getLighting = (idx: number) => this.shapeTargets[idx]?.lighting;
+
+      if (phase.type === 'hold') {
+        const lt = getLighting(phase.shapeIdx);
+        if (lt) {
+          if (lt.ambient !== undefined) targetAmbient = lt.ambient;
+          if (lt.diffuse !== undefined) targetDiffuse = lt.diffuse;
+          if (lt.specular !== undefined) targetSpecular = lt.specular;
+          if (lt.shininess !== undefined) targetShininess = lt.shininess;
+        }
+      } else if (phase.type === 'transition') {
+        const fromLt = getLighting(phase.fromIdx);
+        const toLt = getLighting(phase.toIdx);
+        const fromA = fromLt?.ambient ?? particleConfig.lightAmbient;
+        const toA = toLt?.ambient ?? particleConfig.lightAmbient;
+        const fromD = fromLt?.diffuse ?? particleConfig.lightDiffuse;
+        const toD = toLt?.diffuse ?? particleConfig.lightDiffuse;
+        const fromSp = fromLt?.specular ?? particleConfig.lightSpecular;
+        const toSp = toLt?.specular ?? particleConfig.lightSpecular;
+        const fromSh = fromLt?.shininess ?? particleConfig.lightShininess;
+        const toSh = toLt?.shininess ?? particleConfig.lightShininess;
+        targetAmbient = fromA + (toA - fromA) * phase.t;
+        targetDiffuse = fromD + (toD - fromD) * phase.t;
+        targetSpecular = fromSp + (toSp - fromSp) * phase.t;
+        targetShininess = fromSh + (toSh - fromSh) * phase.t;
+      }
+
+      const lerpRate = 0.05;
+      this.lightAmbientUniform.value += (targetAmbient - this.lightAmbientUniform.value) * lerpRate;
+      this.lightDiffuseUniform.value += (targetDiffuse - this.lightDiffuseUniform.value) * lerpRate;
+      this.lightSpecularUniform.value += (targetSpecular - this.lightSpecularUniform.value) * lerpRate;
+      this.lightShininessUniform.value += (targetShininess - this.lightShininessUniform.value) * lerpRate;
     }
 
     // Update spinTop angles for all shapes

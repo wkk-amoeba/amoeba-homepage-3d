@@ -47,6 +47,12 @@ export interface ModelData {
   };
   sectionSpan?: number;  // 이 shape이 차지하는 스크롤 섹션 수 (기본 1)
   autoRotateSpeed?: number; // 모델별 자전 속도 오버라이드 (rad/s, 미지정 시 particleConfig.autoRotateSpeed 사용)
+  lighting?: {               // 모델별 라이팅 오버라이드 (미지정 시 particleConfig 기본값)
+    ambient?: number;
+    diffuse?: number;
+    specular?: number;
+    shininess?: number;
+  };
   enterTransition?: {        // 이 모델로 진입할 때의 전환 효과 커스텀
     noRotation?: boolean;      // 전환 시 회전 비활성 (기본 false)
     gravity?: boolean;         // 중력 낙하 효과 (기본 false)
@@ -60,8 +66,8 @@ export interface ModelData {
 // 3D 모델 정의
 // geometry가 있으면 프로그래밍 생성, modelPath가 있으면 GLB .bin 로드 -1.5, 0.3, 0
 export const models: ModelData[] = [
-  { id: 0, name: 'Sphere', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [0, 0, 0], holdScatter: 0.015, sectionSpan: 3, depthSize: { min: 0.1, max: 0.7 } },
-  { id: 1, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.4, position: [0, 0, 0], holdScatter: 0.01, radialSize: { min: 0.5, max: 1.0 }, spinTop: { tilt: 0, spinSpeed: 0.3, precessionSpeed: 0.4, nutationAmp: 0.122, nutationSpeed: 1.5 } },
+  { id: 0, name: 'Sphere', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [0, 0, 0], holdScatter: 0.015, sectionSpan: 3, depthSize: { min: 0.1, max: 0.7 }, lighting: { ambient: 0.15, diffuse: 0.4 } },
+  { id: 1, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.4, position: [0, 0, 0], holdScatter: 0.01, radialSize: { min: 0.5, max: 1.0 }, spinTop: { tilt: 0, spinSpeed: 0.3, precessionSpeed: 0.4, nutationAmp: 0.2443, nutationSpeed: 1.5 }, enterTransition: { noRotation: true, scatterScale: 0 } },
   { id: 2, name: 'Human', scale: 0.35, position: [0, -1.4, 0], holdScatter: 0.006 },  // precomputedPositions는 런타임에 주입
   { id: 3, name: 'City3', modelPath: '/models/city_23_high.glb', scale: 1.0, mobileScale: 0.85, position: [0, -1, 0], particleCount: 50000, heightSize: { min: 0.05, max: 0.8, mobileMin: 0.2 }, autoRotateSpeed: -0.3, enterTransition: { noRotation: true, gravity: true, gravityHeight: 3.5, gravityDuration: 5.0, gravityWobbleFreq: 10.0, scatterScale: 0.08 } },
 ];
@@ -101,9 +107,9 @@ export const particleConfig = {
   lightEnabled: true,
   lightDirection: [-0.7, 0.9, 0.7] as [number, number, number],  // 광원 방향 (좌상단)
   lightAmbient: 0.05,            // 최소 밝기 (그림자 부분)
-  lightDiffuse: 1.0,             // 확산광 강도
-  lightSpecular: 0.8,            // 스페큘러 강도 (핀 조명 하이라이트)
-  lightShininess: 32.0,          // 스페큘러 집중도 (높을수록 작고 날카로운 하이라이트)
+  lightDiffuse: 0.2,             // 확산광 강도
+  lightSpecular: 1.0,            // 스페큘러 강도 (핀 조명 하이라이트)
+  lightShininess: 2.0,           // 스페큘러 집중도 (높을수록 작고 날카로운 하이라이트)
   // 전환 시 회전 효과 (파티클이 오브젝트 중심 주위로 회전하며 형태 형성)
   transitionRotation: true,      // 전환 회전 on/off
   transitionRotationSpeed: 3.0,  // 회전 속도 (rad/s)

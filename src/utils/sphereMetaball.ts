@@ -116,14 +116,14 @@ export function registerSphereMetaball(
   }
 
   const config: MetaballConfig = {
-    mainRadius: options.mainRadius ?? 1.35,
-    bobAmplitude: options.bobAmplitude ?? 0.3,
+    mainRadius: options.mainRadius ?? 0.5,
+    bobAmplitude: options.bobAmplitude ?? 0,
     bobSpeed: options.bobSpeed ?? 1.2,
-    satelliteCount: options.satelliteCount ?? 5,
-    satelliteRadius: options.satelliteRadius ?? 0.45,
-    orbitRadius: options.orbitRadius ?? 0.6,
+    satelliteCount: options.satelliteCount ?? 1,
+    satelliteRadius: options.satelliteRadius ?? 0.1,
+    orbitRadius: options.orbitRadius ?? 0.5,
     orbitSpeed: options.orbitSpeed ?? 0.6,
-    threshold: options.threshold ?? 1.0,
+    threshold: options.threshold ?? 0.5,
   };
 
   const positions = shape.positions;
