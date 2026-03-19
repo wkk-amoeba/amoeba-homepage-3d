@@ -12,6 +12,7 @@ interface ShapeTarget {
   holdScatter: number;        // hold 상태 scatter 비율 (0=완전 형태, >0=흩어짐)
   heightSize?: { min: number; max: number; mobileMin?: number; yMin: number; yMax: number }; // Y 위치 기반 크기
   radialSize?: { min: number; max: number; maxRadius: number }; // 중심축 거리 기반 크기
+  depthSize?: { min: number; max: number; zMin: number; zMax: number }; // Z 깊이 기반 크기
   spinTop?: { tilt: number; spinSpeed: number; precessionSpeed: number; nutationAmp: number; nutationSpeed: number };
   autoRotateSpeed?: number; // 모델별 자전 속도 오버라이드
   enterTransition?: { noRotation?: boolean; gravity?: boolean; gravityHeight?: number; gravityDuration?: number; gravityWobbleFreq?: number; scatterScale?: number };
@@ -73,6 +74,8 @@ export class ParticleMorpher {
   private lightDirUniform: { value: THREE.Vector3 };
   private lightAmbientUniform = { value: particleConfig.lightAmbient };
   private lightDiffuseUniform = { value: particleConfig.lightDiffuse };
+  private lightSpecularUniform = { value: particleConfig.lightSpecular };
+  private lightShininessUniform = { value: particleConfig.lightShininess };
   private shapeCenterUniform = { value: new THREE.Vector3(0, 0, 0) };
 
   // Per-particle micro-orbit axes (precomputed at load)
@@ -161,6 +164,14 @@ export class ParticleMorpher {
 
   setLightDiffuse(v: number) {
     this.lightDiffuseUniform.value = v;
+  }
+
+  setLightSpecular(v: number) {
+    this.lightSpecularUniform.value = v;
+  }
+
+  setLightShininess(v: number) {
+    this.lightShininessUniform.value = v;
   }
 
   /** Register a per-frame updater for a shape (e.g., animated FBX walking) */
@@ -335,6 +346,12 @@ export class ParticleMorpher {
         radialSizeData = { ...config.radialSize, maxRadius };
       }
 
+      // Compute Z bounds for depthSize
+      let depthSizeData: ShapeTarget['depthSize'] = undefined;
+      if (config.depthSize) {
+        depthSizeData = { ...config.depthSize, zMin, zMax };
+      }
+
       // Store spinTop config (with defaults for optional nutation)
       let spinTopData: ShapeTarget['spinTop'] = undefined;
       if (config.spinTop) {
@@ -357,6 +374,7 @@ export class ParticleMorpher {
         holdScatter: config.holdScatter || 0,
         heightSize: heightSizeData,
         radialSize: radialSizeData,
+        depthSize: depthSizeData,
         spinTop: spinTopData,
         autoRotateSpeed: config.autoRotateSpeed,
         enterTransition: config.enterTransition,
@@ -475,6 +493,8 @@ export class ParticleMorpher {
     const lightDirUniform = this.lightDirUniform;
     const lightAmbientUniform = this.lightAmbientUniform;
     const lightDiffuseUniform = this.lightDiffuseUniform;
+    const lightSpecularUniform = this.lightSpecularUniform;
+    const lightShininessUniform = this.lightShininessUniform;
     const shapeCenterUniform = this.shapeCenterUniform;
 
     material.onBeforeCompile = (shader) => {
@@ -485,6 +505,8 @@ export class ParticleMorpher {
       shader.uniforms.lightDir = lightDirUniform;
       shader.uniforms.lightAmbient = lightAmbientUniform;
       shader.uniforms.lightDiffuse = lightDiffuseUniform;
+      shader.uniforms.lightSpecular = lightSpecularUniform;
+      shader.uniforms.lightShininess = lightShininessUniform;
       shader.uniforms.shapeCenter = shapeCenterUniform;
 
       shader.vertexShader = shader.vertexShader.replace(
@@ -497,6 +519,8 @@ uniform float localZMax;
 uniform vec3 lightDir;
 uniform float lightAmbient;
 uniform float lightDiffuse;
+uniform float lightSpecular;
+uniform float lightShininess;
 uniform vec3 shapeCenter;
 varying float vBrightness;
 void main() {`
@@ -514,7 +538,10 @@ void main() {`
             vec3 localPos = position - shapeCenter;
             vec3 worldNormal = normalize(mat3(modelMatrix) * localPos);
             float diff = max(dot(worldNormal, lightDir), 0.0);
-            vBrightness = lightAmbient + lightDiffuse * diff;
+            vec3 viewDir = normalize(cameraPosition - (modelMatrix * vec4(position, 1.0)).xyz);
+            vec3 reflectDir = reflect(-lightDir, worldNormal);
+            float spec = pow(max(dot(viewDir, reflectDir), 0.0), lightShininess);
+            vBrightness = lightAmbient + lightDiffuse * diff + lightSpecular * spec;
           }`
       );
 
@@ -783,11 +810,13 @@ void main() {`
     let effectiveCenter: THREE.Vector3;
     let activeHeightSize: ShapeTarget['heightSize'] = undefined;
     let activeRadialSize: ShapeTarget['radialSize'] = undefined;
+    let activeDepthSize: ShapeTarget['depthSize'] = undefined;
     if (phase.type === 'hold') {
       const shape = this.shapeTargets[phase.shapeIdx];
       effectiveCenter = shape.worldOffset;
       activeHeightSize = shape.heightSize;
       activeRadialSize = shape.radialSize;
+      activeDepthSize = shape.depthSize;
       this.localZMinUniform.value = shape.zMin;
       this.localZMaxUniform.value = shape.zMax;
     } else {
@@ -1107,6 +1136,15 @@ void main() {`
         const normalizedR = Math.min(1, radialDist / (activeRadialSize.maxRadius || 1));
         const radialMul = activeRadialSize.min + (activeRadialSize.max - activeRadialSize.min) * normalizedR;
         sizeMulTarget *= radialMul;
+      }
+
+      // Depth (Z) based size effect (먼쪽=min, 가까운쪽=max)
+      if (activeDepthSize) {
+        const z = baseZ - effectiveCenter.z;
+        const normalizedZ = (z - activeDepthSize.zMin) / (activeDepthSize.zMax - activeDepthSize.zMin || 1);
+        const clampedZ = Math.max(0, Math.min(1, normalizedZ));
+        const depthMul = activeDepthSize.min + (activeDepthSize.max - activeDepthSize.min) * clampedZ;
+        sizeMulTarget *= depthMul;
       }
 
       // Smooth size multiplier

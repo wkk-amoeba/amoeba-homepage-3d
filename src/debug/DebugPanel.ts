@@ -176,6 +176,8 @@ export class DebugPanel {
       dirZ: particleConfig.lightDirection[2],
       ambient: particleConfig.lightAmbient,
       diffuse: particleConfig.lightDiffuse,
+      specular: particleConfig.lightSpecular,
+      shininess: particleConfig.lightShininess,
     };
 
     const updateLightDir = () => {
@@ -193,6 +195,12 @@ export class DebugPanel {
     lightFolder.add(lightParams, 'diffuse', 0, 1, 0.05).name('Diffuse').onChange((v: number) => {
       morpher.setLightDiffuse(v);
       bg.setLightDiffuse(v);
+    });
+    lightFolder.add(lightParams, 'specular', 0, 2, 0.05).name('Specular').onChange((v: number) => {
+      morpher.setLightSpecular(v);
+    });
+    lightFolder.add(lightParams, 'shininess', 1, 128, 1).name('Shininess').onChange((v: number) => {
+      morpher.setLightShininess(v);
     });
 
     globalFolder.open();
@@ -306,6 +314,12 @@ export class DebugPanel {
         folder.add(unifiedCfg, 'deformHoldScatter', 0, 0.1, 0.001).name('Scatter: Deform');
         folder.add(unifiedCfg, 'orbitalHoldScatter', 0, 0.1, 0.001).name('Scatter: Orbital');
         folder.add(unifiedCfg, 'orbital2HoldScatter', 0, 0.1, 0.001).name('Scatter: 위성');
+
+        if (shape.depthSize) {
+          const ds = shape.depthSize;
+          folder.add(ds, 'min', 0, 1.0, 0.05).name('Depth Size Min');
+          folder.add(ds, 'max', 0, 2.0, 0.05).name('Depth Size Max');
+        }
 
         const deformFolder = folder.addFolder('Deform');
         const dc = unifiedCfg.deform;

@@ -174,8 +174,8 @@ export function createBackgroundParticles(
   const positions = new Float32Array(count * 3);
 
   for (let i = 0; i < count; i++) {
-    // Uniform distribution in cylindrical shell (minRadius ~ radius)
-    const angle = Math.random() * Math.PI * 2;
+    // Back half only (z < 0): particles stay behind the object
+    const angle = Math.PI + Math.random() * Math.PI;
     const r = Math.sqrt(Math.random() * (radius * radius - minRadius * minRadius) + minRadius * minRadius);
 
     positions[i * 3] = Math.cos(angle) * r;

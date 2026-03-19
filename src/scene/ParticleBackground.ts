@@ -162,7 +162,18 @@ void main() {`
   setLightDiffuse(v: number) { this.lightDiffuseUniform.value = v; }
 
   update(delta: number) {
-    this.points.rotation.y += backgroundConfig.rotationSpeed * delta;
+    // Flow right-to-left with wrap-around (stays behind object)
+    const posAttr = this.points.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const arr = posAttr.array as Float32Array;
+    const speed = backgroundConfig.rotationSpeed * 2;
+    const r = backgroundConfig.radius;
+    for (let i = 0; i < posAttr.count; i++) {
+      arr[i * 3] += speed * delta; // move right (positive X)
+      if (arr[i * 3] > r) {
+        arr[i * 3] -= r * 2; // wrap to left side
+      }
+    }
+    posAttr.needsUpdate = true;
 
     // Fade-in triggered by intro gather reaching 80%
     if (!this.fadeComplete) {

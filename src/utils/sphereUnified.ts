@@ -343,7 +343,7 @@ export function registerUnifiedSphere(
   const config: UnifiedSphereConfig = {
     deform: {
       noiseScale: 3.4,
-      maxDeform: 0.42,
+      maxDeform: 0,
       breathSpeed: 1.8,
       breathMin: 0.7,
       breathMax: 1.0,
@@ -372,7 +372,7 @@ export function registerUnifiedSphere(
     transitionWidth: 0.1, // 10% of local progress for blending
     subSection1: 0.2,     // deform ends at 20% → orbital starts
     subSection2: 0.4,     // orbital ends at 40% → orbital2 holds 60%
-    deformHoldScatter: 0.015,
+    deformHoldScatter: 0,
     orbitalHoldScatter: 0.015,
     orbital2HoldScatter: 0.001,
   };

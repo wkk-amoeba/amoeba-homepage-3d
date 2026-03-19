@@ -37,6 +37,7 @@ export interface ModelData {
   holdScatter?: number;  // hold 상태에서 유지할 scatter 비율 (0=완전 형태, 1=완전 흩어짐)
   heightSize?: { min: number; max: number; mobileMin?: number }; // Y 위치 기반 파티클 크기 (아래=min, 위=max 배율, mobileMin: 모바일 전용 min)
   radialSize?: { min: number; max: number }; // 중심축 거리 기반 파티클 크기 (중심=min, 외곽=max 배율)
+  depthSize?: { min: number; max: number }; // Z 깊이 기반 파티클 크기 (먼쪽=min, 가까운쪽=max 배율)
   spinTop?: {              // 팽이 효과 (rotation 대신 동적 회전)
     tilt: number;            // 기울기 (라디안)
     spinSpeed: number;       // 자전 속도 (rad/s, 자체 축 중심)
@@ -59,7 +60,7 @@ export interface ModelData {
 // 3D 모델 정의
 // geometry가 있으면 프로그래밍 생성, modelPath가 있으면 GLB .bin 로드 -1.5, 0.3, 0
 export const models: ModelData[] = [
-  { id: 0, name: 'Sphere', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [0, 0, 0], holdScatter: 0.015, sectionSpan: 3 },
+  { id: 0, name: 'Sphere', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [0, 0, 0], holdScatter: 0.015, sectionSpan: 3, depthSize: { min: 0.1, max: 0.7 } },
   { id: 1, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.4, position: [0, 0, 0], holdScatter: 0.01, radialSize: { min: 0.5, max: 1.0 }, spinTop: { tilt: 0, spinSpeed: 0.3, precessionSpeed: 0.4, nutationAmp: 0.122, nutationSpeed: 1.5 } },
   { id: 2, name: 'Human', scale: 0.35, position: [0, -1.4, 0], holdScatter: 0.006 },  // precomputedPositions는 런타임에 주입
   { id: 3, name: 'City3', modelPath: '/models/city_23_high.glb', scale: 1.0, mobileScale: 0.85, position: [0, -1, 0], particleCount: 50000, heightSize: { min: 0.05, max: 0.8, mobileMin: 0.2 }, autoRotateSpeed: -0.3, enterTransition: { noRotation: true, gravity: true, gravityHeight: 3.5, gravityDuration: 5.0, gravityWobbleFreq: 10.0, scatterScale: 0.08 } },
@@ -71,8 +72,8 @@ export type ParticleMode = 'dots' | 'tetrahedron';
 // 파티클 설정
 export const particleConfig = {
   size: 0.02,              // 파티클 크기
-  depthNearMul: 1.7,      // 가까운 파티클 크기 배율
-  depthFarMul: 0.8,       // 먼 파티클 크기 배율
+  depthNearMul: 1.7,      // 가까운 파티클 크기 배율 (최대)
+  depthFarMul: 0.3,       // 먼 파티클 크기 배율 (최소)
   mode: 'dots' as ParticleMode,
   mouseRadius: 0.3,        // 돔 반경 (로컬 유닛)
   activationRadius: 2.0,   // 마우스 근접 시 효과 활성 반경 (월드 유닛)
@@ -101,6 +102,8 @@ export const particleConfig = {
   lightDirection: [-0.7, 0.9, 0.7] as [number, number, number],  // 광원 방향 (좌상단)
   lightAmbient: 0.05,            // 최소 밝기 (그림자 부분)
   lightDiffuse: 1.0,             // 확산광 강도
+  lightSpecular: 0.8,            // 스페큘러 강도 (핀 조명 하이라이트)
+  lightShininess: 32.0,          // 스페큘러 집중도 (높을수록 작고 날카로운 하이라이트)
   // 전환 시 회전 효과 (파티클이 오브젝트 중심 주위로 회전하며 형태 형성)
   transitionRotation: true,      // 전환 회전 on/off
   transitionRotationSpeed: 3.0,  // 회전 속도 (rad/s)
@@ -141,8 +144,8 @@ export const introConfig = {
 export const backgroundConfig = {
   enabled: true,          // 기본 활성
   count: 700,
-  radius: 5,             // 원통 반경
-  height: 5,             // 원통 높이 (Y축)
+  radius: 8,             // 원통 반경
+  height: 8,             // 원통 높이 (Y축)
   minRadius: 1,          // 카메라 근처 빈 영역
   size: 0.03,
   opacity: 1,
