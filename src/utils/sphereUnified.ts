@@ -211,6 +211,7 @@ function computeMetaballLinearSplit(
   allDirs: LinearDir[], satCenters: Float64Array,
   mainParticleRatio?: number,
   maxSatZ?: number,
+  centerOutput?: Float32Array,
 ) {
   const satCount = Math.min(config.satelliteCount, 8);
   const mainR2 = config.mainRadius * config.mainRadius;
@@ -248,6 +249,11 @@ function computeMetaballLinearSplit(
       output[i * 3] = mainCx + nx * tHigh;
       output[i * 3 + 1] = mainCy + ny * tHigh;
       output[i * 3 + 2] = mainCz + nz * tHigh;
+      if (centerOutput) {
+        centerOutput[i * 3] = mainCx;
+        centerOutput[i * 3 + 1] = mainCy;
+        centerOutput[i * 3 + 2] = mainCz;
+      }
       continue;
     }
     for (let iter = 0; iter < 8; iter++) {
@@ -262,6 +268,11 @@ function computeMetaballLinearSplit(
     output[i * 3] = mainCx + nx * t;
     output[i * 3 + 1] = mainCy + ny * t;
     output[i * 3 + 2] = mainCz + nz * t;
+    if (centerOutput) {
+      centerOutput[i * 3] = mainCx;
+      centerOutput[i * 3 + 1] = mainCy;
+      centerOutput[i * 3 + 2] = mainCz;
+    }
   }
 
   // Satellite particles: interleaved assignment + linear scan for first surface crossing
@@ -303,6 +314,11 @@ function computeMetaballLinearSplit(
       output[i * 3] = scx + nx * satFallbackR;
       output[i * 3 + 1] = scy + ny * satFallbackR;
       output[i * 3 + 2] = scz + nz * satFallbackR;
+      if (centerOutput) {
+        centerOutput[i * 3] = scx;
+        centerOutput[i * 3 + 1] = scy;
+        centerOutput[i * 3 + 2] = scz;
+      }
       continue;
     }
 
@@ -320,6 +336,11 @@ function computeMetaballLinearSplit(
     output[i * 3] = scx + nx * tF;
     output[i * 3 + 1] = scy + ny * tF;
     output[i * 3 + 2] = scz + nz * tF;
+    if (centerOutput) {
+      centerOutput[i * 3] = scx;
+      centerOutput[i * 3 + 1] = scy;
+      centerOutput[i * 3 + 2] = scz;
+    }
   }
 }
 
@@ -360,7 +381,7 @@ export function getActiveUnifiedConfig(): UnifiedSphereConfig | null {
 
 export function registerUnifiedSphere(
   morpher: {
-    getShapeTargets: () => { positions: Float32Array; activeCount: number; holdScatter: number; lighting?: { ambient?: number; diffuse?: number; specular?: number; shininess?: number } }[];
+    getShapeTargets: () => { positions: Float32Array; activeCount: number; holdScatter: number; lighting?: { ambient?: number; diffuse?: number; specular?: number; shininess?: number }; particleCenters?: Float32Array; usePerParticleCenter?: number }[];
     setShapeUpdater: (idx: number, fn: (delta: number, scrollProgress: number) => void) => void;
     getSectionBounds: (idx: number) => { start: number; end: number } | null;
   },
@@ -417,7 +438,7 @@ export function registerUnifiedSphere(
     // 서브 섹션별 조명 (4속성 모두 명시하여 프레임 간 값 잔존 방지)
     deformLighting:  { ambient: 0.1, diffuse: 3.0, specular: 10, shininess: 20.0 },
     orbitalLighting: { ambient: 0.15, diffuse: 0.4, specular: 0, shininess: 2.0 },
-    orbital2Lighting: { ambient: 10, diffuse: 0.1, specular: 0, shininess: 2.0 }, //전체 밝기, 확산광도, 핀 조명 0이면 번쩍이는 반사효과 제거, 집중도 높을 수록 날카로운 하이라이트
+    orbital2Lighting: { ambient: 0.1, diffuse: 6.0, specular: 0.3, shininess: 4.0 }, //0.12, 0.5, 0.3, 4.0  per-particle center로 위성별 개별 조명 적용
     orbital2MainParticleRatio: 0.80, // 메인/위성 파티클 비율 (0~1). 미지정 시 표면적 비례 자동 계산
     orbital2MaxSatZ: -1.0, // 위성 최대 Z (0=메인 중심까지, 음수=더 뒤로, 미지정=mainRadius)
   };
@@ -454,6 +475,8 @@ export function registerUnifiedSphere(
   // Scratch buffers for blending
   const bufA = new Float32Array(maxCount * 3);
   const bufB = new Float32Array(maxCount * 3);
+  // Per-particle center buffer for dynamic lighting (orbital2용)
+  const centerBuf = new Float32Array(maxCount * 3);
 
   // Satellite data: orbital uses circular orbits, orbital2 uses linear reciprocation
   const allSatellites = makeSatellites(8);
@@ -501,6 +524,16 @@ export function registerUnifiedSphere(
       shape.holdScatter = config.orbitalHoldScatter * (1 - t) + config.orbital2HoldScatter * t;
     } else {
       shape.holdScatter = config.orbital2HoldScatter;
+    }
+
+    // Per-particle center 전환: orbital→orbital2 구간에서 0→1 smoothstep
+    if (localProgress < S2 - tw) {
+      shape.usePerParticleCenter = 0;
+    } else if (localProgress < S2 + tw) {
+      const t = (localProgress - (S2 - tw)) / (2 * tw);
+      shape.usePerParticleCenter = t * t * (3 - 2 * t); // smoothstep
+    } else {
+      shape.usePerParticleCenter = 1;
     }
 
     // Dynamically set lighting based on active sub-section
@@ -592,7 +625,7 @@ export function registerUnifiedSphere(
         computeMetaballOrbital(outA, count, normals, avgRadius, elapsed, config.metaball, allSatellites, satCenters);
         break;
       case 'orbital2':
-        computeMetaballLinearSplit(outA, count, normals, elapsed, config.orbital2, allLinearDirs, satCenters2, config.orbital2MainParticleRatio, config.orbital2MaxSatZ);
+        computeMetaballLinearSplit(outA, count, normals, elapsed, config.orbital2, allLinearDirs, satCenters2, config.orbital2MainParticleRatio, config.orbital2MaxSatZ, centerBuf);
         break;
     }
 
@@ -603,7 +636,7 @@ export function registerUnifiedSphere(
           computeMetaballOrbital(bufB, count, normals, avgRadius, elapsed, config.metaball, allSatellites, satCenters);
           break;
         case 'orbital2':
-          computeMetaballLinearSplit(bufB, count, normals, elapsed, config.orbital2, allLinearDirs, satCenters2, config.orbital2MainParticleRatio, config.orbital2MaxSatZ);
+          computeMetaballLinearSplit(bufB, count, normals, elapsed, config.orbital2, allLinearDirs, satCenters2, config.orbital2MainParticleRatio, config.orbital2MaxSatZ, centerBuf);
           break;
       }
 
@@ -612,6 +645,11 @@ export function registerUnifiedSphere(
       for (let i = 0; i < count * 3; i++) {
         positions[i] = bufA[i] * invT + bufB[i] * blendT;
       }
+    }
+
+    // Per-particle center를 shape에 전달 (orbital2 활성 시)
+    if (effectA === 'orbital2' || effectB === 'orbital2') {
+      shape.particleCenters = centerBuf;
     }
   });
 

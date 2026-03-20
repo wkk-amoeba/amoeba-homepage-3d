@@ -18,6 +18,8 @@ interface ShapeTarget {
   autoRotateSpeed?: number; // 모델별 자전 속도 오버라이드
   lighting?: { ambient?: number; diffuse?: number; specular?: number; shininess?: number };
   enterTransition?: { noRotation?: boolean; gravity?: boolean; gravityHeight?: number; gravityDuration?: number; gravityWobbleFreq?: number; scatterScale?: number };
+  particleCenters?: Float32Array;    // per-particle 조명 중심 (count * 3, 위성별 개별 중심)
+  usePerParticleCenter?: number;     // 0=shapeCenter uniform 사용, 1=particleCenters attribute 사용
 }
 
 interface HoldPhase {
@@ -46,6 +48,7 @@ export class ParticleMorpher {
   private mouseOffset: Float32Array = new Float32Array(0);
   private mouseVelocity: Float32Array = new Float32Array(0);
   private sizeMultipliers: Float32Array = new Float32Array(0);
+  private particleCenters: Float32Array = new Float32Array(0);
 
   // Parallax rotation
   private parallaxRotX = 0;
@@ -79,6 +82,7 @@ export class ParticleMorpher {
   private lightSpecularUniform: { value: number };
   private lightShininessUniform: { value: number };
   private shapeCenterUniform = { value: new THREE.Vector3(0, 0, 0) };
+  private usePerParticleCenterUniform = { value: 0.0 }; // 0=shapeCenter uniform, 1=per-particle center attribute
   private introLightBlendUniform = { value: 1.0 }; // 0=flat gray, 1=full computed lighting
 
   // Per-particle micro-orbit axes (precomputed at load)
@@ -443,6 +447,7 @@ export class ParticleMorpher {
     this.mouseOffset = new Float32Array(this.particleCount * 3);
     this.mouseVelocity = new Float32Array(this.particleCount * 3);
     this.sizeMultipliers = new Float32Array(this.particleCount);
+    this.particleCenters = new Float32Array(this.particleCount * 3);
     const firstActiveCount = this.shapeTargets[0].activeCount;
     for (let i = 0; i < this.particleCount; i++) {
       this.sizeMultipliers[i] = i < firstActiveCount ? 1.0 : 0;
@@ -523,6 +528,7 @@ export class ParticleMorpher {
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(this.currentPositions, 3));
     geometry.setAttribute('mouseMul', new THREE.BufferAttribute(this.sizeMultipliers, 1));
+    geometry.setAttribute('particleCenter', new THREE.BufferAttribute(this.particleCenters, 3));
 
     const material = new THREE.PointsMaterial({
       transparent: true,
@@ -557,11 +563,13 @@ export class ParticleMorpher {
       shader.uniforms.lightSpecular = lightSpecularUniform;
       shader.uniforms.lightShininess = lightShininessUniform;
       shader.uniforms.shapeCenter = shapeCenterUniform;
+      shader.uniforms.usePerParticleCenter = this.usePerParticleCenterUniform;
       shader.uniforms.introLightBlend = this.introLightBlendUniform;
 
       shader.vertexShader = shader.vertexShader.replace(
         'void main() {',
         `attribute float mouseMul;
+attribute vec3 particleCenter;
 uniform float depthNearMul;
 uniform float depthFarMul;
 uniform float localZMin;
@@ -572,6 +580,7 @@ uniform float lightDiffuse;
 uniform float lightSpecular;
 uniform float lightShininess;
 uniform vec3 shapeCenter;
+uniform float usePerParticleCenter;
 uniform float introLightBlend;
 varying float vBrightness;
 void main() {`
@@ -586,7 +595,8 @@ void main() {`
             float depthT = clamp((mvPosition.z - nearZ) / (farZ - nearZ), 0.0, 1.0);
             gl_PointSize *= mix(depthNearMul, depthFarMul, depthT);
             gl_PointSize *= mouseMul;
-            vec3 localPos = position - shapeCenter;
+            vec3 lightCenter = mix(shapeCenter, particleCenter, usePerParticleCenter);
+            vec3 localPos = position - lightCenter;
             vec3 worldNormal = normalize(mat3(modelMatrix) * localPos);
             float diff = max(dot(worldNormal, lightDir), 0.0);
             vec3 viewDir = normalize(cameraPosition - (modelMatrix * vec4(position, 1.0)).xyz);
@@ -762,6 +772,20 @@ void main() {`
       this.lightDiffuseUniform.value = targetDiffuse;
       this.lightSpecularUniform.value = targetSpecular;
       this.lightShininessUniform.value = targetShininess;
+    }
+
+    // Per-particle center for dynamic satellite lighting
+    {
+      const phase = this.getPhase(scrollProgress);
+      const activeShape = phase.type === 'hold'
+        ? this.shapeTargets[phase.shapeIdx]
+        : this.shapeTargets[phase.toIdx];
+      const usePC = activeShape?.usePerParticleCenter ?? 0;
+      this.usePerParticleCenterUniform.value = usePC;
+      if (usePC > 0 && activeShape?.particleCenters && this.points) {
+        const count = activeShape.activeCount;
+        this.particleCenters.set(activeShape.particleCenters.subarray(0, count * 3));
+      }
     }
 
     // Update spinTop angles for all shapes
@@ -1478,6 +1502,10 @@ void main() {`
     posAttr.needsUpdate = true;
     const mulAttr = this.points.geometry.getAttribute('mouseMul') as THREE.BufferAttribute;
     if (mulAttr) mulAttr.needsUpdate = true;
+    if (this.usePerParticleCenterUniform.value > 0) {
+      const centerAttr = this.points.geometry.getAttribute('particleCenter') as THREE.BufferAttribute;
+      if (centerAttr) centerAttr.needsUpdate = true;
+    }
   }
 
   dispose() {
