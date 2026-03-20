@@ -436,9 +436,9 @@ export function registerUnifiedSphere(
     orbitalHoldScatter: 0.015,
     orbital2HoldScatter: 0.001,
     // 서브 섹션별 조명 (4속성 모두 명시하여 프레임 간 값 잔존 방지)
-    deformLighting:  { ambient: 0.1, diffuse: 3.0, specular: 10, shininess: 20.0 },
+    deformLighting:  { ambient: 0.1, diffuse: 3.0, specular: 10.0, shininess: 20.0 },
     orbitalLighting: { ambient: 0.15, diffuse: 0.4, specular: 0, shininess: 2.0 },
-    orbital2Lighting: { ambient: 0.1, diffuse: 6.0, specular: 0.3, shininess: 4.0 }, //0.12, 0.5, 0.3, 4.0  per-particle center로 위성별 개별 조명 적용
+    orbital2Lighting: { ambient: 0.2, diffuse: 6.0, specular: 10.0, shininess: 20.0 }, //0.12, 0.5, 0.3, 4.0  per-particle center로 위성별 개별 조명 적용
     orbital2MainParticleRatio: 0.80, // 메인/위성 파티클 비율 (0~1). 미지정 시 표면적 비례 자동 계산
     orbital2MaxSatZ: -1.0, // 위성 최대 Z (0=메인 중심까지, 음수=더 뒤로, 미지정=mainRadius)
   };
