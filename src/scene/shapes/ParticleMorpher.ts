@@ -14,7 +14,7 @@ interface ShapeTarget {
   heightSize?: { min: number; max: number; mobileMin?: number; yMin: number; yMax: number }; // Y 위치 기반 크기
   radialSize?: { min: number; max: number; maxRadius: number }; // 중심축 거리 기반 크기
   depthSize?: { min: number; max: number; zMin: number; zMax: number }; // Z 깊이 기반 크기
-  spinTop?: { tilt: number; spinSpeed: number; precessionSpeed: number; nutationAmp: number; nutationSpeed: number };
+  spinTop?: { tilt: number; spinSpeed: number; precessionSpeed: number; nutationAmp: number; nutationSpeed: number; pivotY: number };
   autoRotateSpeed?: number; // 모델별 자전 속도 오버라이드
   lighting?: { ambient?: number; diffuse?: number; specular?: number; shininess?: number };
   enterTransition?: { noRotation?: boolean; gravity?: boolean; gravityHeight?: number; gravityDuration?: number; gravityWobbleFreq?: number; scatterScale?: number };
@@ -62,6 +62,7 @@ interface MouseContext {
 
 interface SpinTopMatrix {
   shapeIdx: number; // -1 if no spinTop active
+  pivotY: number;   // Y offset from center for tilt pivot (negative = bottom)
   m00: number; m01: number; m02: number;
   m10: number; m11: number; m12: number;
   m20: number; m21: number; m22: number;
@@ -165,6 +166,7 @@ export class ParticleMorpher {
   };
   private _spinTopMat: SpinTopMatrix = {
     shapeIdx: -1,
+    pivotY: 0,
     m00: 1, m01: 0, m02: 0,
     m10: 0, m11: 1, m12: 0,
     m20: 0, m21: 0, m22: 1,
@@ -467,6 +469,7 @@ export class ParticleMorpher {
           precessionSpeed: config.spinTop.precessionSpeed,
           nutationAmp: config.spinTop.nutationAmp ?? 0,
           nutationSpeed: config.spinTop.nutationSpeed ?? 1,
+          pivotY: config.spinTop.pivotY ?? 0,
         };
       }
 
@@ -1095,6 +1098,7 @@ void main() {`
   private computeSpinTopMatrix(phase: MorphPhase): SpinTopMatrix {
     const m = this._spinTopMat;
     m.shapeIdx = -1;
+    m.pivotY = 0;
     m.m00 = 1; m.m01 = 0; m.m02 = 0;
     m.m10 = 0; m.m11 = 1; m.m12 = 0;
     m.m20 = 0; m.m21 = 0; m.m22 = 1;
@@ -1103,6 +1107,7 @@ void main() {`
       const st = this.shapeTargets[phase.shapeIdx].spinTop;
       if (st) {
         m.shapeIdx = phase.shapeIdx;
+        m.pivotY = st.pivotY;
         const tilt = st.tilt + (st.nutationAmp > 0 ? Math.sin(this.precessionAngles[phase.shapeIdx] * st.nutationSpeed / st.precessionSpeed) * st.nutationAmp : 0);
         const spinA = this.spinAngles[phase.shapeIdx];
         const precA = this.precessionAngles[phase.shapeIdx];
@@ -1131,6 +1136,7 @@ void main() {`
       const toSt = this.shapeTargets[phase.toIdx].spinTop;
       if (toSt) {
         m.shapeIdx = phase.toIdx;
+        m.pivotY = toSt.pivotY;
         const blendT = phase.t; // 0→1 over full transition
         const tilt = (toSt.tilt + (toSt.nutationAmp > 0 ? Math.sin(this.precessionAngles[phase.toIdx] * toSt.nutationSpeed / toSt.precessionSpeed) * toSt.nutationAmp : 0)) * blendT;
         const spinA = this.spinAngles[phase.toIdx] * blendT;
@@ -1559,9 +1565,9 @@ void main() {`
 
       // SpinTop rotation (팽이: spin + precession + nutation)
       if (stm.shapeIdx >= 0) {
-        // Rotate around shape center (local coords, before worldOffset)
+        // Rotate around pivot point (pivotY offsets from center toward bottom)
         const cx = effectiveCenter.x;
-        const cy = effectiveCenter.y;
+        const cy = effectiveCenter.y + stm.pivotY;
         const cz = effectiveCenter.z;
         const lx = baseX - cx;
         const ly = baseY - cy;

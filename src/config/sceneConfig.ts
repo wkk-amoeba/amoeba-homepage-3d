@@ -44,6 +44,7 @@ export interface ModelData {
     precessionSpeed: number; // 세차운동 속도 (rad/s, Y축 주위 축 회전)
     nutationAmp?: number;    // 장동 진폭 (라디안, 기울기 미세 흔들림)
     nutationSpeed?: number;  // 장동 속도 (rad/s)
+    pivotY?: number;         // 틸트 피벗 Y 오프셋 (정규화 좌표, 음수=하단, 기본 0=중심)
   };
   sectionSpan?: number;  // 이 shape이 차지하는 스크롤 섹션 수 (기본 1)
   autoRotateSpeed?: number; // 모델별 자전 속도 오버라이드 (rad/s, 미지정 시 particleConfig.autoRotateSpeed 사용)
@@ -81,7 +82,7 @@ export const models: ModelData[] = [
   // 씬 01-02: Sphere — lighting/holdScatter는 sphereUnified.ts 서브섹션별로 런타임 덮어씌워짐
   { id: 0, name: 'Sphere', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [0, 0, 0], holdScatter: 0.015, sectionSpan: 1, depthSize: { min: 0.1, max: 0.7 }, lighting: { ambient: 0.15, diffuse: 0.4, specular: 1.0, shininess: 2.0 }, },
   // 씬 03: Gyro
-  { id: 1, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.4, position: [0, 0, 0], holdScatter: 0.01, sectionSpan: 1, radialSize: { min: 0.5, max: 1.0 }, spinTop: { tilt: 0, spinSpeed: 0.3, precessionSpeed: 0.4, nutationAmp: 0.2443, nutationSpeed: 1.5 }, enterTransition: { noRotation: false, scatterScale: 0.03 }, lighting: { ambient: 0.1, diffuse: 0.3, specular: 0, shininess: 2.0 } },
+  { id: 1, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.6, position: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, radialSize: { min: 0.5, max: 0.6 }, spinTop: { tilt: 0, spinSpeed: 0.3, precessionSpeed: 0.4, nutationAmp: 0.3491, nutationSpeed: 1.5, pivotY: -4 }, enterTransition: { noRotation: false, scatterScale: 0.03 }, lighting: { ambient: 0.1, diffuse: 1.0, specular: 6.0, shininess: 3.0 } },
   // 씬 04: Human — precomputedPositions는 런타임에 주입
   { id: 2, name: 'Human', scale: 0.35, position: [0, -1.4, 0], holdScatter: 0.006, lighting: { ambient: 0.05, diffuse: 0.2, specular: 0, shininess: 2.0 } },
 ];
@@ -119,11 +120,11 @@ export const particleConfig = {
   scatterScale: 0.03,
   // 가짜 라이팅 (파티클 위치 기반 법선으로 명암)
   lightEnabled: true,
-  lightDirection: [-10, 10, 15.0] as [number, number, number],  // 광원 방향 (좌상단)
-  lightAmbient: 0.05,            // 최소 밝기 (그림자 부분)
-  lightDiffuse: 0.2,             // 확산광 강도
-  lightSpecular: 1.0,            // 스페큘러 강도 (핀 조명 하이라이트)
-  lightShininess: 2.0,           // 스페큘러 집중도 (높을수록 작고 날카로운 하이라이트)
+  lightDirection: [-5.0, 5.0, 8.0] as [number, number, number],  // -10, 10, 15 광원 방향 (좌상단)
+  lightAmbient: 0.05,            // 0.05최소 밝기 (그림자 부분)
+  lightDiffuse: 5.0,             // 0.2 확산광 강도
+  lightSpecular: 0.5,            // 1.0 스페큘러 강도 (핀 조명 하이라이트)
+  lightShininess: 0.5,           // 2,0 스페큘러 집중도 (높을수록 작고 날카로운 하이라이트)
   // 전환 시 회전 효과 (파티클이 오브젝트 중심 주위로 회전하며 형태 형성)
   transitionRotation: true,      // 전환 회전 on/off
   transitionRotationSpeed: 3.0,  // 회전 속도 (rad/s)

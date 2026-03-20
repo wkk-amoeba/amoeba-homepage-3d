@@ -169,7 +169,8 @@ SkinnedMesh + AnimationMixer (root motion 제거: Hips X/Z = 0)
 ```typescript
 models = [
   { id: 0, name: 'Sphere', modelPath: '/models/high_shpere.glb', scale: 0.36, sectionSpan: 1, ... },
-  { id: 1, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.4, sectionSpan: 1, ... },
+  { id: 1, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.6, sectionSpan: 1,
+    spinTop: { tilt: 0, spinSpeed: 0.3, precessionSpeed: 0.4, nutationAmp: 0.2793, nutationSpeed: 1.5, pivotY: -4 }, ... },
   { id: 2, name: 'Human', scale: 0.35, ... },  // precomputedPositions 런타임 주입
 ]
 ```
@@ -188,9 +189,9 @@ animationPhases = {
 introConfig = {
   enabled: true,
   duration: 2.0,          // 인트로 지속 시간 (초)
-  delay: 0.3,             // 페이지 로드 후 대기 시간 (초)
+  delay: 0,               // 페이지 로드 후 대기 시간 (초)
   scatterDistance: [5, 15],
-  rotationTurns: -9,      // 인트로 중 자전 회전수
+  rotationTurns: -2,      // 인트로 중 자전 회전수
 }
 ```
 
@@ -228,7 +229,7 @@ PERFORMANCE_CONFIG = {
 
 | 페이지 | URL | 엔트리포인트 | 설명 |
 | ------ | --- | ------------ | ---- |
-| 메인 | `/` | `src/main.ts` | 씬 01~05 스크롤 전환 |
+| 메인 | `/` | `src/main.ts` | 씬 01~04 스크롤 전환 |
 | 걷기 사람 | `/human.html` | `src/human.ts` | FBX 독립 뷰어 (OrbitControls, 사이드뷰) |
 | 실험 | `/experiment.html` | `src/experiment.ts` | 4개 shape + 걷기 사람 + 디버그 패널 |
 | 크로노그래피 | `/chronography.html` | - | 별도 페이지 |
@@ -263,6 +264,26 @@ orbital2MaxSatZ: -1.0,            // 위성 Z 제한 (음수=카메라 뒤로)
 - **리니어 스캔 + 바이섹션**: 위성 중심에서 외부로 리니어 스캔(20스텝)하여 첫 번째 표면 교차점 탐색 → 바이섹션으로 정밀 위치 결정
 - **스캔 범위**: `mainR * 3` — 위성이 메인 구 내부에 합쳐질 때 외부 표면까지 도달 가능
 - **폴백**: 스캔 범위 내에서 교차점을 못 찾으면 `satR / √threshold`에 배치
+
+## 씬 03 Gyro 팽이 회전 (spinTop)
+
+`ParticleMorpher.ts`의 `computeSpinTopMatrix`에서 매 프레임 회전 행렬 계산:
+
+- **자전(spin)**: Y축 자전, `spinSpeed` rad/s
+- **세차(precession)**: 기울어진 축이 Y축 주위 회전, `precessionSpeed` rad/s
+- **장동(nutation)**: 기울기가 `±nutationAmp` 범위로 사인파 흔들림
+- **pivotY**: 회전 피벗 Y 오프셋 (음수=하단). 기본 0은 shape 중심, -4는 하단 꼭짓점 근처
+
+```text
+회전 합성: Ry(precession) × Rz(tilt + nutation) × Ry(spin)
+피벗: effectiveCenter.y + pivotY
+```
+
+## 배경 파티클 (ParticleBackground)
+
+- **독립 라이팅**: `backgroundConfig.lightAmbient/lightDiffuse` — 오브젝트 파티클과 별개
+- **parallax**: 마우스 위치에 따른 배경 회전 (오브젝트 파티클과 동기)
+- **exclusionRadius**: 오브젝트 실루엣 주변 파티클 제외 영역 (NDC 단위)
 
 ## 주의사항
 - **씬 번호 ≠ models[] 인덱스**. 씬 01-02는 models[0] 하나를 공유
