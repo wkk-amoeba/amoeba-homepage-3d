@@ -279,8 +279,8 @@ function computeMetaballLinearSplit(
   // Interleaved: particle i → satellite (i % satCount), ensuring each satellite gets
   // normals spread across the full index range (avoids spatial clustering from GLB vertex order)
   const satFallbackR = config.satelliteRadius / Math.sqrt(threshold);
-  const scanRange = config.satelliteRadius * 4;
-  const scanSteps = 12;
+  const scanRange = Math.max(config.satelliteRadius * 4, config.mainRadius * 3);
+  const scanSteps = 20;
   const scanDt = scanRange / scanSteps;
 
   for (let i = mainParticleEnd; i < count; i++) {
@@ -289,11 +289,14 @@ function computeMetaballLinearSplit(
     const scy = satCenters[s * 3 + 1];
     const scz = satCenters[s * 3 + 2];
 
+    // 위성-메인 거리 기반 최대 도달 거리 (브릿지는 허용, 메인 구 먼쪽은 차단)
+    const dxSM = scx - mainCx, dySM = scy - mainCy, dzSM = scz - mainCz;
+    const distToMain = Math.sqrt(dxSM * dxSM + dySM * dySM + dzSM * dzSM);
+    const maxReach = Math.max(config.satelliteRadius * 3, distToMain * 0.7);
+
     const nx = normals[i * 3], ny = normals[i * 3 + 1], nz = normals[i * 3 + 2];
 
     // Linear scan from satellite center outward to find FIRST surface crossing.
-    // This prevents the bisection from converging to the main sphere's surface
-    // when the metaball field is non-monotonic (satellite near main).
     let crossLow = -1, crossHigh = -1;
     for (let step = 1; step <= scanSteps; step++) {
       const t = scanDt * step;
@@ -308,12 +311,13 @@ function computeMetaballLinearSplit(
       }
     }
 
-    if (crossLow < 0) {
-      // Entire scan range above threshold — satellite deep inside merged blob.
-      // Place on satellite's theoretical isolated surface.
-      output[i * 3] = scx + nx * satFallbackR;
-      output[i * 3 + 1] = scy + ny * satFallbackR;
-      output[i * 3 + 2] = scz + nz * satFallbackR;
+    if (crossLow < 0 || crossLow > maxReach) {
+      // 표면을 못 찾았거나 너무 먼 곳에서 찾음 → 위성 표면 근처에 배치 (노이즈로 링 방지)
+      const noise = 0.85 + 0.3 * hash3(i * 0.1, s * 0.7, 0);
+      const tFb = satFallbackR * noise;
+      output[i * 3] = scx + nx * tFb;
+      output[i * 3 + 1] = scy + ny * tFb;
+      output[i * 3 + 2] = scz + nz * tFb;
       if (centerOutput) {
         centerOutput[i * 3] = scx;
         centerOutput[i * 3 + 1] = scy;
@@ -332,7 +336,14 @@ function computeMetaballLinearSplit(
       );
       if (f > threshold) tLow = tMid; else tHigh = tMid;
     }
-    const tF = (tLow + tHigh) * 0.5;
+    let tF = (tLow + tHigh) * 0.5;
+
+    // 최대 도달 거리 초과 시 위성 표면으로 클램프 (노이즈 적용)
+    if (tF > maxReach) {
+      const noise = 0.85 + 0.3 * hash3(i * 0.1, s * 0.7, 0);
+      tF = satFallbackR * noise;
+    }
+
     output[i * 3] = scx + nx * tF;
     output[i * 3 + 1] = scy + ny * tF;
     output[i * 3 + 2] = scz + nz * tF;
@@ -438,7 +449,7 @@ export function registerUnifiedSphere(
     // 서브 섹션별 조명 (4속성 모두 명시하여 프레임 간 값 잔존 방지)
     deformLighting:  { ambient: 0.1, diffuse: 3.0, specular: 10.0, shininess: 20.0 },
     orbitalLighting: { ambient: 0.15, diffuse: 0.4, specular: 0, shininess: 2.0 },
-    orbital2Lighting: { ambient: 0.2, diffuse: 6.0, specular: 10.0, shininess: 20.0 }, //0.12, 0.5, 0.3, 4.0  per-particle center로 위성별 개별 조명 적용
+    orbital2Lighting: { ambient: 0.2, diffuse: 6.0, specular: 1.0, shininess: 1.0 }, //0.12, 0.5, 0.3, 4.0  per-particle center로 위성별 개별 조명 적용
     orbital2MainParticleRatio: 0.80, // 메인/위성 파티클 비율 (0~1). 미지정 시 표면적 비례 자동 계산
     orbital2MaxSatZ: -1.0, // 위성 최대 Z (0=메인 중심까지, 음수=더 뒤로, 미지정=mainRadius)
   };

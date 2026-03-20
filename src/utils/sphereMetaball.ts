@@ -419,8 +419,8 @@ export function registerSphereMetaballLinear(
 
     // --- Satellite particles: interleaved + linear scan for first crossing ---
     const satFallbackR = satR / Math.sqrt(threshold);
-    const scanRange = satR * 4;
-    const scanSteps = 12;
+    const scanRange = Math.max(satR * 4, mainR * 3);
+    const scanSteps = 20;
     const scanDt = scanRange / scanSteps;
 
     for (let i = mainParticleEnd; i < count; i++) {
@@ -428,6 +428,10 @@ export function registerSphereMetaballLinear(
       const scx = satCenters[s * 3];
       const scy = satCenters[s * 3 + 1];
       const scz = satCenters[s * 3 + 2];
+
+      const dxSM = scx - mainCx, dySM = scy - mainCy, dzSM = scz - mainCz;
+      const distToMain = Math.sqrt(dxSM * dxSM + dySM * dySM + dzSM * dzSM);
+      const maxReach = Math.max(satR * 3, distToMain * 0.5);
 
       const nx = normals[i * 3];
       const ny = normals[i * 3 + 1];
@@ -449,10 +453,13 @@ export function registerSphereMetaballLinear(
         }
       }
 
-      if (crossLow < 0) {
-        positions[i * 3] = scx + nx * satFallbackR;
-        positions[i * 3 + 1] = scy + ny * satFallbackR;
-        positions[i * 3 + 2] = scz + nz * satFallbackR;
+      if (crossLow < 0 || crossLow > maxReach) {
+        const h = Math.sin(i * 127.1 + s * 311.7) * 43758.5453;
+        const noise = 0.85 + 0.3 * (h - Math.floor(h));
+        const tFb = satFallbackR * noise;
+        positions[i * 3] = scx + nx * tFb;
+        positions[i * 3 + 1] = scy + ny * tFb;
+        positions[i * 3 + 2] = scz + nz * tFb;
         continue;
       }
 
@@ -468,7 +475,13 @@ export function registerSphereMetaballLinear(
         else tHigh = tMid;
       }
 
-      const tF = (tLow + tHigh) * 0.5;
+      let tF = (tLow + tHigh) * 0.5;
+      if (tF > maxReach) {
+        const h = Math.sin(i * 127.1 + s * 311.7) * 43758.5453;
+        const noise = 0.85 + 0.3 * (h - Math.floor(h));
+        tF = satFallbackR * noise;
+      }
+
       positions[i * 3] = scx + nx * tF;
       positions[i * 3 + 1] = scy + ny * tF;
       positions[i * 3 + 2] = scz + nz * tF;
