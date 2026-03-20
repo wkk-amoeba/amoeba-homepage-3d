@@ -1,1 +1,1 @@
-export { ModelShape } from './ModelShape';
+export { ParticleMorpher } from './ParticleMorpher';

@@ -65,13 +65,13 @@ export interface ModelData {
 
 // 3D 모델 정의
 // ┌─────────────────────────────────────────────────────────────────────────┐
+// │ ⚠️ 총 씬 4개, models[] 배열은 3개. Sphere가 씬 2개(01, 02)를 차지!   │
 // │ 씬 번호 ≠ models[] 인덱스. 씬 01-02는 models[0] 하나를 공유           │
 // │                                                                         │
-// │ 씬 01 (원/Sphere)   → models[0] — 프로그래밍 생성 (sphereUnified.ts)   │
-// │ 씬 02 (위성/Satellite) → models[0] — 같은 shape의 서브섹션              │
-// │ 씬 03 (Gyro)         → models[1] — 3D 파일 (GLB)                       │
-// │ 씬 04 (Human)        → models[2] — 3D 파일 (FBX)                       │
-// │ 씬 05 (City3)        → models[3] — 3D 파일 (GLB)                       │
+// │ 씬 01 (원/Sphere)      → models[0] — 프로그래밍 (sphereUnified.ts)     │
+// │ 씬 02 (위성/Satellite) → models[0] — 같은 shape의 서브섹션             │
+// │ 씬 03 (Gyro)           → models[1] — 3D 파일 (GLB)                     │
+// │ 씬 04 (Human)          → models[2] — 3D 파일 (FBX)                     │
 // │                                                                         │
 // │ particleCount: 모델별 파티클 수 (미지정 시 .bin 버텍스 수 사용)         │
 // │ 씬 01-02 서브섹션별 파티클 수는 sphereUnified.ts config에서 설정:       │
@@ -84,8 +84,6 @@ export const models: ModelData[] = [
   { id: 1, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.4, position: [0, 0, 0], holdScatter: 0.01, sectionSpan: 1, radialSize: { min: 0.5, max: 1.0 }, spinTop: { tilt: 0, spinSpeed: 0.3, precessionSpeed: 0.4, nutationAmp: 0.2443, nutationSpeed: 1.5 }, enterTransition: { noRotation: false, scatterScale: 0.03 }, lighting: { ambient: 0.1, diffuse: 0.3, specular: 0, shininess: 2.0 } },
   // 씬 04: Human — precomputedPositions는 런타임에 주입
   { id: 2, name: 'Human', scale: 0.35, position: [0, -1.4, 0], holdScatter: 0.006, lighting: { ambient: 0.05, diffuse: 0.2, specular: 0, shininess: 2.0 } },
-  // 씬 05: City3
-  { id: 3, name: 'City3', modelPath: '/models/city_23_high.glb', scale: 1.0, mobileScale: 0.85, position: [0, -1, 0], particleCount: 50000, heightSize: { min: 0.05, max: 0.8, mobileMin: 0.2 }, autoRotateSpeed: -0.3, enterTransition: { noRotation: true, gravity: true, gravityHeight: 3.5, gravityDuration: 5.0, gravityWobbleFreq: 10.0, scatterScale: 0.08 }, lighting: { ambient: 0.05, diffuse: 0.2, specular: 0, shininess: 2.0 } },
 ];
 
 // 파티클 렌더링 모드
@@ -136,14 +134,14 @@ export const particleConfig = {
 };
 
 // 스크롤 설정 — sectionGap은 1 span 단위의 크기, 총 span 합계로 균등 배분
-// 총 span = Sphere(1) + Gyro(1) + Human(1) + City3(1) = 4
+// 총 span = Sphere(1) + Gyro(1) + Human(1) = 3
 export const scrollConfig = {
   introEnd: 0,             // 인트로 없음
   sectionStart: 0,         // 첫 모델 즉시 시작
-  sectionGap: 1 / 4,       // 25% per span unit
-  sectionDuration: 1 / 4,  // 25% per span unit
+  sectionGap: 1 / 3,       // 33.3% per span unit
+  sectionDuration: 1 / 3,  // 33.3% per span unit
   previewOffset: 0,        // 프리뷰 없음
-  modelCount: 4,           // 총 span 합계 (deprecated — getPhase에서 span 누적 사용)
+  modelCount: 3,           // 총 span 합계 (deprecated — getPhase에서 span 누적 사용)
 };
 
 // 애니메이션 페이즈 설정 (진입 → 고정 → 퇴장)
@@ -167,10 +165,9 @@ export const snapConfig = {
   enabled: true,
   points: [
     { name: 'Scene01', progress: 0.025 },   // Sphere deform (localProgress ~0.1)
-    { name: 'Scene02', progress: 0.15 },     // Sphere orbital2/satellite (localProgress ~0.6)
-    { name: 'Scene03', progress: 0.375 },    // Gyro hold 중앙
-    { name: 'Scene04', progress: 0.625 },    // Human hold 중앙
-    { name: 'Scene05', progress: 0.875 },    // City3 hold 중앙
+    { name: 'Scene02', progress: 0.20 },     // Sphere orbital2/satellite (localProgress ~0.6)
+    { name: 'Scene03', progress: 0.50 },     // Gyro hold 중앙
+    { name: 'Scene04', progress: 0.835 },    // Human hold 중앙
   ],
   transitionDuration: 1.5,   // 기본 전환 시간 (초), 거리에 따라 조절됨
   wheelThreshold: 50,        // 휠 누적 delta 트리거 기준

@@ -28,8 +28,6 @@ const MODELS = [
   { name: 'city_shanghai', file: 'city-_shanghai-sandboxie.glb', maxVertices: 50_000 },
   { name: 'san_francisco_city', file: 'san_francisco_city.glb', maxVertices: 50_000, heightBias: { threshold: 0.3, weight: 5 } },
   { name: 'inception_gyro', file: 'inception_gyro.glb' },
-  { name: 'city_23', file: 'city_23.glb', maxVertices: 50_000 },
-  { name: 'city_23_high', file: 'city_23.glb', binName: 'city_23_high.bin', maxVertices: 50_000, heightCutoff: 0.15, heightBias: { threshold: 0.6, weight: 8 } },
 ];
 
 const MAX_VERTICES = 15_000;

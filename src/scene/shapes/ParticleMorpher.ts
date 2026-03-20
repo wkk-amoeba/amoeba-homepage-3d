@@ -36,6 +36,37 @@ interface TransitionPhase {
 
 type MorphPhase = HoldPhase | TransitionPhase;
 
+// Reusable context objects (GC 방지: 매 프레임 mutate)
+interface PhaseContext {
+  effectiveCenter: THREE.Vector3;
+  activeHeightSize: ShapeTarget['heightSize'];
+  activeRadialSize: ShapeTarget['radialSize'];
+  activeDepthSize: ShapeTarget['depthSize'];
+  transFromDepthSize: ShapeTarget['depthSize'];
+  transToDepthSize: ShapeTarget['depthSize'];
+  transFromRadialSize: ShapeTarget['radialSize'];
+  transToRadialSize: ShapeTarget['radialSize'];
+  transFromHeightSize: ShapeTarget['heightSize'];
+  transToHeightSize: ShapeTarget['heightSize'];
+  transSizeBlend: number; // 0=fully from, 1=fully to
+}
+
+interface MouseContext {
+  localMousePos: THREE.Vector3 | null;
+  scaledMouseRadius: number;
+  mouseRadiusSq: number;
+  camDirLocalX: number;
+  camDirLocalY: number;
+  camDirLocalZ: number;
+}
+
+interface SpinTopMatrix {
+  shapeIdx: number; // -1 if no spinTop active
+  m00: number; m01: number; m02: number;
+  m10: number; m11: number; m12: number;
+  m20: number; m21: number; m22: number;
+}
+
 export class ParticleMorpher {
   private scene: THREE.Scene;
   private points: THREE.Points | null = null;
@@ -109,6 +140,37 @@ export class ParticleMorpher {
 
   // Debug
   private _userScale = 1.0;
+
+  // Reusable context objects (GC 방지)
+  private _phaseCtx: PhaseContext = {
+    effectiveCenter: new THREE.Vector3(),
+    activeHeightSize: undefined,
+    activeRadialSize: undefined,
+    activeDepthSize: undefined,
+    transFromDepthSize: undefined,
+    transToDepthSize: undefined,
+    transFromRadialSize: undefined,
+    transToRadialSize: undefined,
+    transFromHeightSize: undefined,
+    transToHeightSize: undefined,
+    transSizeBlend: 0,
+  };
+  private _mouseCtx: MouseContext = {
+    localMousePos: null,
+    scaledMouseRadius: 0,
+    mouseRadiusSq: 0,
+    camDirLocalX: 0,
+    camDirLocalY: 0,
+    camDirLocalZ: -1,
+  };
+  private _spinTopMat: SpinTopMatrix = {
+    shapeIdx: -1,
+    m00: 1, m01: 0, m02: 0,
+    m10: 0, m11: 1, m12: 0,
+    m20: 0, m21: 0, m22: 1,
+  };
+  // Reusable Vector3 for transition center lerp (GC 방지)
+  private _transitionCenter = new THREE.Vector3();
 
   constructor(scene: THREE.Scene, modelConfigs: ModelData[]) {
     this.scene = scene;
@@ -696,99 +758,84 @@ void main() {`
     return t * t * (3 - 2 * t);
   }
 
-  // --- Main update ---
-
   private easeOutCubic(t: number): number {
     return 1 - Math.pow(1 - t, 3);
   }
 
-  update(delta: number, scrollProgress: number, mouseWorldPos: THREE.Vector3 | null, mouseNorm?: THREE.Vector2, mouseSpeed?: number) {
-    if (!this.points || this.shapeTargets.length === 0) return;
+  // =====================================================================
+  // update() helper methods — extracted for readability
+  // =====================================================================
 
-    // Call per-shape animation updaters (e.g., walking FBX)
-    for (const [, updater] of this.shapeUpdaters) {
-      updater(delta, scrollProgress);
+  /** Auto-rotation (slow continuous Y-axis spin, per-model override) */
+  private updateAutoRotation(delta: number, scrollProgress: number) {
+    const phase = this.getPhase(scrollProgress);
+    let rotSpeed = particleConfig.autoRotateSpeed;
+    if (phase.type === 'hold') {
+      const shapeSpeed = this.shapeTargets[phase.shapeIdx]?.autoRotateSpeed;
+      if (shapeSpeed !== undefined) rotSpeed = shapeSpeed;
+    } else if (phase.type === 'transition') {
+      const shapeSpeed = this.shapeTargets[phase.toIdx]?.autoRotateSpeed;
+      if (shapeSpeed !== undefined) rotSpeed = shapeSpeed;
+    }
+    if (rotSpeed !== 0) {
+      this.autoRotateAngle += rotSpeed * delta;
+    }
+  }
+
+  /** Per-shape lighting override (smooth lerp) + per-particle center */
+  private updateLightingUniforms(scrollProgress: number) {
+    const phase = this.getPhase(scrollProgress);
+    let targetAmbient = particleConfig.lightAmbient;
+    let targetDiffuse = particleConfig.lightDiffuse;
+    let targetSpecular = particleConfig.lightSpecular;
+    let targetShininess = particleConfig.lightShininess;
+
+    const getLighting = (idx: number) => this.shapeTargets[idx]?.lighting;
+
+    if (phase.type === 'hold') {
+      const lt = getLighting(phase.shapeIdx);
+      if (lt) {
+        if (lt.ambient !== undefined) targetAmbient = lt.ambient;
+        if (lt.diffuse !== undefined) targetDiffuse = lt.diffuse;
+        if (lt.specular !== undefined) targetSpecular = lt.specular;
+        if (lt.shininess !== undefined) targetShininess = lt.shininess;
+      }
+    } else if (phase.type === 'transition') {
+      const fromLt = getLighting(phase.fromIdx);
+      const toLt = getLighting(phase.toIdx);
+      const fromA = fromLt?.ambient ?? particleConfig.lightAmbient;
+      const toA = toLt?.ambient ?? particleConfig.lightAmbient;
+      const fromD = fromLt?.diffuse ?? particleConfig.lightDiffuse;
+      const toD = toLt?.diffuse ?? particleConfig.lightDiffuse;
+      const fromSp = fromLt?.specular ?? particleConfig.lightSpecular;
+      const toSp = toLt?.specular ?? particleConfig.lightSpecular;
+      const fromSh = fromLt?.shininess ?? particleConfig.lightShininess;
+      const toSh = toLt?.shininess ?? particleConfig.lightShininess;
+      targetAmbient = fromA + (toA - fromA) * phase.t;
+      targetDiffuse = fromD + (toD - fromD) * phase.t;
+      targetSpecular = fromSp + (toSp - fromSp) * phase.t;
+      targetShininess = fromSh + (toSh - fromSh) * phase.t;
     }
 
-    // Sync depth uniforms
-    this.depthNearMulUniform.value = particleConfig.depthNearMul;
-    this.depthFarMulUniform.value = particleConfig.depthFarMul;
-
-    // Update scale
-    this.points.scale.setScalar(this._userScale);
-
-    // Auto-rotation (slow continuous Y-axis spin, per-model override)
-    {
-      const phase = this.getPhase(scrollProgress);
-      let rotSpeed = particleConfig.autoRotateSpeed;
-      if (phase.type === 'hold') {
-        const shapeSpeed = this.shapeTargets[phase.shapeIdx]?.autoRotateSpeed;
-        if (shapeSpeed !== undefined) rotSpeed = shapeSpeed;
-      } else if (phase.type === 'transition') {
-        const shapeSpeed = this.shapeTargets[phase.toIdx]?.autoRotateSpeed;
-        if (shapeSpeed !== undefined) rotSpeed = shapeSpeed;
-      }
-      if (rotSpeed !== 0) {
-        this.autoRotateAngle += rotSpeed * delta;
-      }
-    }
-
-    // Per-shape lighting override (smooth lerp)
-    {
-      const phase = this.getPhase(scrollProgress);
-      let targetAmbient = particleConfig.lightAmbient;
-      let targetDiffuse = particleConfig.lightDiffuse;
-      let targetSpecular = particleConfig.lightSpecular;
-      let targetShininess = particleConfig.lightShininess;
-
-      const getLighting = (idx: number) => this.shapeTargets[idx]?.lighting;
-
-      if (phase.type === 'hold') {
-        const lt = getLighting(phase.shapeIdx);
-        if (lt) {
-          if (lt.ambient !== undefined) targetAmbient = lt.ambient;
-          if (lt.diffuse !== undefined) targetDiffuse = lt.diffuse;
-          if (lt.specular !== undefined) targetSpecular = lt.specular;
-          if (lt.shininess !== undefined) targetShininess = lt.shininess;
-        }
-      } else if (phase.type === 'transition') {
-        const fromLt = getLighting(phase.fromIdx);
-        const toLt = getLighting(phase.toIdx);
-        const fromA = fromLt?.ambient ?? particleConfig.lightAmbient;
-        const toA = toLt?.ambient ?? particleConfig.lightAmbient;
-        const fromD = fromLt?.diffuse ?? particleConfig.lightDiffuse;
-        const toD = toLt?.diffuse ?? particleConfig.lightDiffuse;
-        const fromSp = fromLt?.specular ?? particleConfig.lightSpecular;
-        const toSp = toLt?.specular ?? particleConfig.lightSpecular;
-        const fromSh = fromLt?.shininess ?? particleConfig.lightShininess;
-        const toSh = toLt?.shininess ?? particleConfig.lightShininess;
-        targetAmbient = fromA + (toA - fromA) * phase.t;
-        targetDiffuse = fromD + (toD - fromD) * phase.t;
-        targetSpecular = fromSp + (toSp - fromSp) * phase.t;
-        targetShininess = fromSh + (toSh - fromSh) * phase.t;
-      }
-
-      this.lightAmbientUniform.value = targetAmbient;
-      this.lightDiffuseUniform.value = targetDiffuse;
-      this.lightSpecularUniform.value = targetSpecular;
-      this.lightShininessUniform.value = targetShininess;
-    }
+    this.lightAmbientUniform.value = targetAmbient;
+    this.lightDiffuseUniform.value = targetDiffuse;
+    this.lightSpecularUniform.value = targetSpecular;
+    this.lightShininessUniform.value = targetShininess;
 
     // Per-particle center for dynamic satellite lighting
-    {
-      const phase = this.getPhase(scrollProgress);
-      const activeShape = phase.type === 'hold'
-        ? this.shapeTargets[phase.shapeIdx]
-        : this.shapeTargets[phase.toIdx];
-      const usePC = activeShape?.usePerParticleCenter ?? 0;
-      this.usePerParticleCenterUniform.value = usePC;
-      if (usePC > 0 && activeShape?.particleCenters && this.points) {
-        const count = activeShape.activeCount;
-        this.particleCenters.set(activeShape.particleCenters.subarray(0, count * 3));
-      }
+    const activeShape = phase.type === 'hold'
+      ? this.shapeTargets[phase.shapeIdx]
+      : this.shapeTargets[phase.toIdx];
+    const usePC = activeShape?.usePerParticleCenter ?? 0;
+    this.usePerParticleCenterUniform.value = usePC;
+    if (usePC > 0 && activeShape?.particleCenters && this.points) {
+      const count = activeShape.activeCount;
+      this.particleCenters.set(activeShape.particleCenters.subarray(0, count * 3));
     }
+  }
 
-    // Update spinTop angles for all shapes
+  /** Update spinTop angles for all shapes */
+  private updateSpinTopAngles(delta: number) {
     for (let si = 0; si < this.shapeTargets.length; si++) {
       const st = this.shapeTargets[si].spinTop;
       if (st) {
@@ -796,8 +843,11 @@ void main() {`
         this.precessionAngles[si] += st.precessionSpeed * delta;
       }
     }
+  }
 
-    // Parallax rotation
+  /** Parallax rotation based on mouse position */
+  private updateParallax(mouseNorm?: THREE.Vector2) {
+    if (!this.points) return;
     const pStr = particleConfig.parallaxStrength;
     if (mouseNorm) {
       this.parallaxRotX += (-mouseNorm.y * pStr - this.parallaxRotX) * 0.05;
@@ -807,195 +857,204 @@ void main() {`
       this.parallaxRotY *= 0.95;
     }
     this.points.rotation.set(this.parallaxRotX, this.parallaxRotY, 0);
+  }
 
-    // --- Intro animation: particles gather to form first shape ---
-    if (introConfig.enabled && !this.introComplete) {
-      this.introElapsed += delta;
-      const first = this.shapeTargets[0];
+  /** Intro animation: particles gather to form first shape. Returns true if still animating (caller should return early). */
+  private updateIntroAnimation(delta: number): boolean {
+    if (!introConfig.enabled || this.introComplete || !this.points) return false;
 
-      // Update shader uniforms for first shape
-      this.localZMinUniform.value = first.zMin;
-      this.localZMaxUniform.value = first.zMax;
-      this.shapeCenterUniform.value.copy(first.worldOffset);
-      this._effectiveCenter.set(
-        this.points.position.x + first.worldOffset.x,
-        this.points.position.y + first.worldOffset.y,
-        this.points.position.z + first.worldOffset.z
-      );
+    this.introElapsed += delta;
+    const first = this.shapeTargets[0];
 
-      if (this.introElapsed < introConfig.delay) {
-        // Still in delay phase — keep fully scattered, apply micro-orbit only
-        const posAttr = this.points.geometry.getAttribute('position') as THREE.BufferAttribute;
-        const mat = this.points.material as THREE.PointsMaterial;
-        mat.opacity = 0;
-        this.introOpacity = 0;
-        const noiseAmp = particleConfig.microNoiseAmp;
-        if (noiseAmp > 0) {
-          this.orbitTime += delta;
-          for (let i = 0; i < first.activeCount; i++) {
-            const i3 = i * 3;
-            const angle = this.orbitTime * particleConfig.microNoiseSpeed + this.scatterOffsets[i3];
-            const cosA = Math.cos(angle), sinA = Math.sin(angle);
-            this.currentPositions[i3] = this.scatterOffsets[i3] + (this.orbitAxis1[i3] * cosA + this.orbitAxis2[i3] * sinA) * noiseAmp;
-            this.currentPositions[i3 + 1] = this.scatterOffsets[i3 + 1] + (this.orbitAxis1[i3 + 1] * cosA + this.orbitAxis2[i3 + 1] * sinA) * noiseAmp;
-            this.currentPositions[i3 + 2] = this.scatterOffsets[i3 + 2] + (this.orbitAxis1[i3 + 2] * cosA + this.orbitAxis2[i3 + 2] * sinA) * noiseAmp;
-          }
-        }
-        posAttr.needsUpdate = true;
-        return;
-      }
+    // Update shader uniforms for first shape
+    this.localZMinUniform.value = first.zMin;
+    this.localZMaxUniform.value = first.zMax;
+    this.shapeCenterUniform.value.copy(first.worldOffset);
+    this._effectiveCenter.set(
+      this.points.position.x + first.worldOffset.x,
+      this.points.position.y + first.worldOffset.y,
+      this.points.position.z + first.worldOffset.z
+    );
 
-      // Gathering phase: lerp from scattered positions to first shape
-      const gatherElapsed = this.introElapsed - introConfig.delay;
-      const t = Math.min(1, gatherElapsed / introConfig.duration);
-      const eased = this.easeOutCubic(t);
-
-      // Fade in: opacity rises quickly in the first half of gathering
-      const fadeT = Math.min(1, t * 2);
-      this.introOpacity = this.easeOutCubic(fadeT);
+    if (this.introElapsed < introConfig.delay) {
+      // Still in delay phase — keep fully scattered, apply micro-orbit only
+      const posAttr = this.points.geometry.getAttribute('position') as THREE.BufferAttribute;
       const mat = this.points.material as THREE.PointsMaterial;
-      mat.opacity = this.introOpacity;
-
-      // scatter = 1 - eased: starts at 1 (fully scattered), ends at 0 (formed)
-      const scatter = 1 - eased;
-
-      // Blend lighting and depth sizing: flat gray → computed lighting over intro
-      this.introLightBlendUniform.value = eased;
-      // Blend depth multipliers: 1.0 (uniform size) → actual values
-      this.depthNearMulUniform.value = 1.0 + (particleConfig.depthNearMul - 1.0) * eased;
-      this.depthFarMulUniform.value = 1.0 + (particleConfig.depthFarMul - 1.0) * eased;
-
-      this.orbitTime += delta;
+      mat.opacity = 0;
+      this.introOpacity = 0;
       const noiseAmp = particleConfig.microNoiseAmp;
-
-      // Self-rotation: intro spin + autoRotate combined for seamless handoff
-      const totalAngle = introConfig.rotationTurns * Math.PI * 2;
-      const rotAngle = totalAngle * (1 - eased) + this.autoRotateAngle;
-      const cosRot = Math.cos(rotAngle);
-      const sinRot = Math.sin(rotAngle);
-      const cx = first.worldOffset.x;
-      const cz = first.worldOffset.z;
-
-      for (let i = 0; i < first.activeCount; i++) {
-        const i3 = i * 3;
-        // Lerp: scattered position → target shape position (including holdScatter)
-        const hs = first.holdScatter;
-        const targetX = first.positions[i3] + first.worldOffset.x + (hs > 0 ? this.scatterOffsets[i3] * hs : 0);
-        const targetY = first.positions[i3 + 1] + first.worldOffset.y + (hs > 0 ? this.scatterOffsets[i3 + 1] * hs : 0);
-        const targetZ = first.positions[i3 + 2] + first.worldOffset.z + (hs > 0 ? this.scatterOffsets[i3 + 2] * hs : 0);
-        let bx = this.scatterOffsets[i3] * scatter + targetX * eased;
-        let by = this.scatterOffsets[i3 + 1] * scatter + targetY * eased;
-        let bz = this.scatterOffsets[i3 + 2] * scatter + targetZ * eased;
-
-        // Apply self-rotation around Y axis (like object spinning)
-        if (rotAngle !== 0) {
-          const rx = bx - cx;
-          const rz = bz - cz;
-          bx = cx + rx * cosRot - rz * sinRot;
-          bz = cz + rx * sinRot + rz * cosRot;
-        }
-
-        // Micro-orbit
-        let orbitX = 0, orbitY = 0, orbitZ = 0;
-        if (noiseAmp > 0) {
+      if (noiseAmp > 0) {
+        this.orbitTime += delta;
+        for (let i = 0; i < first.activeCount; i++) {
+          const i3 = i * 3;
           const angle = this.orbitTime * particleConfig.microNoiseSpeed + this.scatterOffsets[i3];
           const cosA = Math.cos(angle), sinA = Math.sin(angle);
-          orbitX = (this.orbitAxis1[i3] * cosA + this.orbitAxis2[i3] * sinA) * noiseAmp;
-          orbitY = (this.orbitAxis1[i3 + 1] * cosA + this.orbitAxis2[i3 + 1] * sinA) * noiseAmp;
-          orbitZ = (this.orbitAxis1[i3 + 2] * cosA + this.orbitAxis2[i3 + 2] * sinA) * noiseAmp;
-        }
-
-        this.currentPositions[i3] = bx + orbitX;
-        this.currentPositions[i3 + 1] = by + orbitY;
-        this.currentPositions[i3 + 2] = bz + orbitZ;
-
-        // Blend depthSize into sizeMultipliers during intro (1.0 → depthMul)
-        if (first.depthSize) {
-          const z = this.currentPositions[i3 + 2] - first.worldOffset.z;
-          const normalizedZ = (z - first.depthSize.zMin) / (first.depthSize.zMax - first.depthSize.zMin || 1);
-          const clampedZ = Math.max(0, Math.min(1, normalizedZ));
-          const depthMul = first.depthSize.min + (first.depthSize.max - first.depthSize.min) * clampedZ;
-          this.sizeMultipliers[i] = 1.0 + (depthMul - 1.0) * eased;
+          this.currentPositions[i3] = this.scatterOffsets[i3] + (this.orbitAxis1[i3] * cosA + this.orbitAxis2[i3] * sinA) * noiseAmp;
+          this.currentPositions[i3 + 1] = this.scatterOffsets[i3 + 1] + (this.orbitAxis1[i3 + 1] * cosA + this.orbitAxis2[i3 + 1] * sinA) * noiseAmp;
+          this.currentPositions[i3 + 2] = this.scatterOffsets[i3 + 2] + (this.orbitAxis1[i3 + 2] * cosA + this.orbitAxis2[i3 + 2] * sinA) * noiseAmp;
         }
       }
-
-      const posAttr = this.points.geometry.getAttribute('position') as THREE.BufferAttribute;
       posAttr.needsUpdate = true;
-      const sizeAttr = this.points.geometry.getAttribute('mouseMul') as THREE.BufferAttribute;
-      sizeAttr.needsUpdate = true;
-
-      if (!this.introGatherTriggered && t >= 0.25) {
-        this.introGatherTriggered = true;
-        window.dispatchEvent(new Event('intro-gather-threshold'));
-      }
-      if (t >= 1) {
-        this.introComplete = true;
-        this.introLightBlendUniform.value = 1.0;
-        this.depthNearMulUniform.value = particleConfig.depthNearMul;
-        this.depthFarMulUniform.value = particleConfig.depthFarMul;
-        (this.points.material as THREE.PointsMaterial).opacity = 1;
-        window.dispatchEvent(new Event('intro-complete'));
-        console.log('ParticleMorpher: intro animation complete');
-      }
-      return;
+      return true;
     }
 
-    // Get current morph phase
-    const phase = this.getPhase(scrollProgress);
+    // Gathering phase: lerp from scattered positions to first shape
+    const gatherElapsed = this.introElapsed - introConfig.delay;
+    const t = Math.min(1, gatherElapsed / introConfig.duration);
+    const eased = this.easeOutCubic(t);
 
-    // Compute effective center and depth bounds for shader
-    let effectiveCenter: THREE.Vector3;
-    let activeHeightSize: ShapeTarget['heightSize'] = undefined;
-    let activeRadialSize: ShapeTarget['radialSize'] = undefined;
-    let activeDepthSize: ShapeTarget['depthSize'] = undefined;
-    // Transition blending: from/to size configs + blend factor
-    let transFromDepthSize: ShapeTarget['depthSize'] = undefined;
-    let transToDepthSize: ShapeTarget['depthSize'] = undefined;
-    let transFromRadialSize: ShapeTarget['radialSize'] = undefined;
-    let transToRadialSize: ShapeTarget['radialSize'] = undefined;
-    let transFromHeightSize: ShapeTarget['heightSize'] = undefined;
-    let transToHeightSize: ShapeTarget['heightSize'] = undefined;
-    let transSizeBlend = 0; // 0=fully from, 1=fully to
+    // Fade in: opacity rises quickly in the first half of gathering
+    const fadeT = Math.min(1, t * 2);
+    this.introOpacity = this.easeOutCubic(fadeT);
+    const mat = this.points.material as THREE.PointsMaterial;
+    mat.opacity = this.introOpacity;
+
+    // scatter = 1 - eased: starts at 1 (fully scattered), ends at 0 (formed)
+    const scatter = 1 - eased;
+
+    // Blend lighting and depth sizing: flat gray → computed lighting over intro
+    this.introLightBlendUniform.value = eased;
+    // Blend depth multipliers: 1.0 (uniform size) → actual values
+    this.depthNearMulUniform.value = 1.0 + (particleConfig.depthNearMul - 1.0) * eased;
+    this.depthFarMulUniform.value = 1.0 + (particleConfig.depthFarMul - 1.0) * eased;
+
+    this.orbitTime += delta;
+    const noiseAmp = particleConfig.microNoiseAmp;
+
+    // Self-rotation: intro spin + autoRotate combined for seamless handoff
+    const totalAngle = introConfig.rotationTurns * Math.PI * 2;
+    const rotAngle = totalAngle * (1 - eased) + this.autoRotateAngle;
+    const cosRot = Math.cos(rotAngle);
+    const sinRot = Math.sin(rotAngle);
+    const cx = first.worldOffset.x;
+    const cz = first.worldOffset.z;
+
+    for (let i = 0; i < first.activeCount; i++) {
+      const i3 = i * 3;
+      // Lerp: scattered position → target shape position (including holdScatter)
+      const hs = first.holdScatter;
+      const targetX = first.positions[i3] + first.worldOffset.x + (hs > 0 ? this.scatterOffsets[i3] * hs : 0);
+      const targetY = first.positions[i3 + 1] + first.worldOffset.y + (hs > 0 ? this.scatterOffsets[i3 + 1] * hs : 0);
+      const targetZ = first.positions[i3 + 2] + first.worldOffset.z + (hs > 0 ? this.scatterOffsets[i3 + 2] * hs : 0);
+      let bx = this.scatterOffsets[i3] * scatter + targetX * eased;
+      let by = this.scatterOffsets[i3 + 1] * scatter + targetY * eased;
+      let bz = this.scatterOffsets[i3 + 2] * scatter + targetZ * eased;
+
+      // Apply self-rotation around Y axis (like object spinning)
+      if (rotAngle !== 0) {
+        const rx = bx - cx;
+        const rz = bz - cz;
+        bx = cx + rx * cosRot - rz * sinRot;
+        bz = cz + rx * sinRot + rz * cosRot;
+      }
+
+      // Micro-orbit
+      let orbitX = 0, orbitY = 0, orbitZ = 0;
+      if (noiseAmp > 0) {
+        const angle = this.orbitTime * particleConfig.microNoiseSpeed + this.scatterOffsets[i3];
+        const cosA = Math.cos(angle), sinA = Math.sin(angle);
+        orbitX = (this.orbitAxis1[i3] * cosA + this.orbitAxis2[i3] * sinA) * noiseAmp;
+        orbitY = (this.orbitAxis1[i3 + 1] * cosA + this.orbitAxis2[i3 + 1] * sinA) * noiseAmp;
+        orbitZ = (this.orbitAxis1[i3 + 2] * cosA + this.orbitAxis2[i3 + 2] * sinA) * noiseAmp;
+      }
+
+      this.currentPositions[i3] = bx + orbitX;
+      this.currentPositions[i3 + 1] = by + orbitY;
+      this.currentPositions[i3 + 2] = bz + orbitZ;
+
+      // Blend depthSize into sizeMultipliers during intro (1.0 → depthMul)
+      if (first.depthSize) {
+        const z = this.currentPositions[i3 + 2] - first.worldOffset.z;
+        const normalizedZ = (z - first.depthSize.zMin) / (first.depthSize.zMax - first.depthSize.zMin || 1);
+        const clampedZ = Math.max(0, Math.min(1, normalizedZ));
+        const depthMul = first.depthSize.min + (first.depthSize.max - first.depthSize.min) * clampedZ;
+        this.sizeMultipliers[i] = 1.0 + (depthMul - 1.0) * eased;
+      }
+    }
+
+    const posAttr = this.points.geometry.getAttribute('position') as THREE.BufferAttribute;
+    posAttr.needsUpdate = true;
+    const sizeAttr = this.points.geometry.getAttribute('mouseMul') as THREE.BufferAttribute;
+    sizeAttr.needsUpdate = true;
+
+    if (!this.introGatherTriggered && t >= 0.25) {
+      this.introGatherTriggered = true;
+      window.dispatchEvent(new Event('intro-gather-threshold'));
+    }
+    if (t >= 1) {
+      this.introComplete = true;
+      this.introLightBlendUniform.value = 1.0;
+      this.depthNearMulUniform.value = particleConfig.depthNearMul;
+      this.depthFarMulUniform.value = particleConfig.depthFarMul;
+      (this.points.material as THREE.PointsMaterial).opacity = 1;
+      window.dispatchEvent(new Event('intro-complete'));
+      console.log('ParticleMorpher: intro animation complete');
+    }
+    return true;
+  }
+
+  /** Compute effective center and depth bounds for shader, populate _phaseCtx */
+  private computePhaseContext(phase: MorphPhase): PhaseContext {
+    const ctx = this._phaseCtx;
+    ctx.activeHeightSize = undefined;
+    ctx.activeRadialSize = undefined;
+    ctx.activeDepthSize = undefined;
+    ctx.transFromDepthSize = undefined;
+    ctx.transToDepthSize = undefined;
+    ctx.transFromRadialSize = undefined;
+    ctx.transToRadialSize = undefined;
+    ctx.transFromHeightSize = undefined;
+    ctx.transToHeightSize = undefined;
+    ctx.transSizeBlend = 0;
+
     if (phase.type === 'hold') {
       const shape = this.shapeTargets[phase.shapeIdx];
-      effectiveCenter = shape.worldOffset;
-      activeHeightSize = shape.heightSize;
-      activeRadialSize = shape.radialSize;
-      activeDepthSize = shape.depthSize;
+      ctx.effectiveCenter.copy(shape.worldOffset);
+      ctx.activeHeightSize = shape.heightSize;
+      ctx.activeRadialSize = shape.radialSize;
+      ctx.activeDepthSize = shape.depthSize;
       this.localZMinUniform.value = shape.zMin;
       this.localZMaxUniform.value = shape.zMax;
     } else {
       const from = this.shapeTargets[phase.fromIdx];
       const to = this.shapeTargets[phase.toIdx];
-      effectiveCenter = new THREE.Vector3().lerpVectors(from.worldOffset, to.worldOffset, phase.t);
+      ctx.effectiveCenter.copy(this._transitionCenter.lerpVectors(from.worldOffset, to.worldOffset, phase.t));
       this.localZMinUniform.value = THREE.MathUtils.lerp(from.zMin, to.zMin, phase.t);
       this.localZMaxUniform.value = THREE.MathUtils.lerp(from.zMax, to.zMax, phase.t);
       // Store both from/to size configs for per-particle blending
-      transFromDepthSize = from.depthSize;
-      transToDepthSize = to.depthSize;
-      transFromRadialSize = from.radialSize;
-      transToRadialSize = to.radialSize;
-      transFromHeightSize = from.heightSize;
-      transToHeightSize = to.heightSize;
-      transSizeBlend = phase.t;
+      ctx.transFromDepthSize = from.depthSize;
+      ctx.transToDepthSize = to.depthSize;
+      ctx.transFromRadialSize = from.radialSize;
+      ctx.transToRadialSize = to.radialSize;
+      ctx.transFromHeightSize = from.heightSize;
+      ctx.transToHeightSize = to.heightSize;
+      ctx.transSizeBlend = phase.t;
     }
-    this.shapeCenterUniform.value.copy(effectiveCenter);
+    this.shapeCenterUniform.value.copy(ctx.effectiveCenter);
     this._effectiveCenter.set(
-      this.points.position.x + effectiveCenter.x,
-      this.points.position.y + effectiveCenter.y,
-      this.points.position.z + effectiveCenter.z
+      this.points!.position.x + ctx.effectiveCenter.x,
+      this.points!.position.y + ctx.effectiveCenter.y,
+      this.points!.position.z + ctx.effectiveCenter.z
     );
+    return ctx;
+  }
 
-    // --- Mouse interaction setup ---
-    let localMousePos: THREE.Vector3 | null = null;
-    if (mouseWorldPos) {
+  /** Mouse interaction setup: transform to local space, update activity */
+  private computeMouseContext(mouseWorldPos: THREE.Vector3 | null, effectiveCenter: THREE.Vector3, mouseSpeed?: number): MouseContext {
+    const ctx = this._mouseCtx;
+    ctx.localMousePos = null;
+    ctx.camDirLocalX = 0;
+    ctx.camDirLocalY = 0;
+    ctx.camDirLocalZ = -1;
+
+    if (mouseWorldPos && this.points) {
       const objectCenter = this.points.position.clone().add(effectiveCenter);
       const distToCenter = mouseWorldPos.distanceTo(objectCenter);
       if (distToCenter < particleConfig.activationRadius * this._userScale) {
         // Translate only (no rotation) so interaction zone matches the dome disc visual
         const p = this.points.position;
         const invScale = 1 / this._userScale;
-        localMousePos = new THREE.Vector3(
+        ctx.localMousePos = new THREE.Vector3(
           (mouseWorldPos.x - p.x) * invScale,
           (mouseWorldPos.y - p.y) * invScale,
           (mouseWorldPos.z - p.z) * invScale,
@@ -1004,7 +1063,7 @@ void main() {`
     }
 
     // Mouse activity tracking
-    const isMouseNear = localMousePos !== null;
+    const isMouseNear = ctx.localMousePos !== null;
     if (isMouseNear && !this.wasMouseNear) {
       this.mouseActivity = 1.0;
     } else {
@@ -1017,34 +1076,33 @@ void main() {`
     }
     this.wasMouseNear = isMouseNear;
 
-    const scaledMouseRadius = particleConfig.mouseRadius / this._userScale;
-    const mouseRadiusSq = scaledMouseRadius * scaledMouseRadius;
-    const useSpring = particleConfig.springEnabled;
-    const stiffness = particleConfig.springStiffness;
-    const damping = particleConfig.springDamping;
-    const clampedDelta = Math.min(delta, 0.033);
+    ctx.scaledMouseRadius = particleConfig.mouseRadius / this._userScale;
+    ctx.mouseRadiusSq = ctx.scaledMouseRadius * ctx.scaledMouseRadius;
 
     // Camera direction in local space (for dome projection)
-    let camDirLocalX = 0, camDirLocalY = 0, camDirLocalZ = -1;
-    if (localMousePos) {
+    if (ctx.localMousePos && this.points) {
       const invQ = this.points.quaternion.clone().invert();
       const camDir = new THREE.Vector3(0, 0, -1).applyQuaternion(invQ);
-      camDirLocalX = camDir.x;
-      camDirLocalY = camDir.y;
-      camDirLocalZ = camDir.z;
+      ctx.camDirLocalX = camDir.x;
+      ctx.camDirLocalY = camDir.y;
+      ctx.camDirLocalZ = camDir.z;
     }
 
-    this.orbitTime += delta;
+    return ctx;
+  }
 
-    // Precompute spinTop rotation matrix for active shape (Ry(precession) * Rz(tilt) * Ry(spin))
-    let spinTopShapeIdx = -1;
-    let stm00 = 1, stm01 = 0, stm02 = 0;
-    let stm10 = 0, stm11 = 1, stm12 = 0;
-    let stm20 = 0, stm21 = 0, stm22 = 1;
+  /** Precompute spinTop rotation matrix for active shape (Ry(precession) * Rz(tilt) * Ry(spin)) */
+  private computeSpinTopMatrix(phase: MorphPhase): SpinTopMatrix {
+    const m = this._spinTopMat;
+    m.shapeIdx = -1;
+    m.m00 = 1; m.m01 = 0; m.m02 = 0;
+    m.m10 = 0; m.m11 = 1; m.m12 = 0;
+    m.m20 = 0; m.m21 = 0; m.m22 = 1;
+
     if (phase.type === 'hold') {
       const st = this.shapeTargets[phase.shapeIdx].spinTop;
       if (st) {
-        spinTopShapeIdx = phase.shapeIdx;
+        m.shapeIdx = phase.shapeIdx;
         const tilt = st.tilt + (st.nutationAmp > 0 ? Math.sin(this.precessionAngles[phase.shapeIdx] * st.nutationSpeed / st.precessionSpeed) * st.nutationAmp : 0);
         const spinA = this.spinAngles[phase.shapeIdx];
         const precA = this.precessionAngles[phase.shapeIdx];
@@ -1056,23 +1114,23 @@ void main() {`
         const cs = Math.cos(spinA), ss = Math.sin(spinA);
         // Combined: Ry(p) * Rz(t) * Ry(s)
         // Row 0
-        stm00 = cp * ct * cs - sp * ss;
-        stm01 = -cp * st2;
-        stm02 = cp * ct * ss + sp * cs;
+        m.m00 = cp * ct * cs - sp * ss;
+        m.m01 = -cp * st2;
+        m.m02 = cp * ct * ss + sp * cs;
         // Row 1
-        stm10 = st2 * cs;
-        stm11 = ct;
-        stm12 = st2 * ss;
+        m.m10 = st2 * cs;
+        m.m11 = ct;
+        m.m12 = st2 * ss;
         // Row 2
-        stm20 = -sp * ct * cs - cp * ss;
-        stm21 = sp * st2;
-        stm22 = -sp * ct * ss + cp * cs;
+        m.m20 = -sp * ct * cs - cp * ss;
+        m.m21 = sp * st2;
+        m.m22 = -sp * ct * ss + cp * cs;
       }
     } else if (phase.type === 'transition') {
       // Blend spinTop rotation during transition (identity → full rotation)
       const toSt = this.shapeTargets[phase.toIdx].spinTop;
       if (toSt) {
-        spinTopShapeIdx = phase.toIdx;
+        m.shapeIdx = phase.toIdx;
         const blendT = phase.t; // 0→1 over full transition
         const tilt = (toSt.tilt + (toSt.nutationAmp > 0 ? Math.sin(this.precessionAngles[phase.toIdx] * toSt.nutationSpeed / toSt.precessionSpeed) * toSt.nutationAmp : 0)) * blendT;
         const spinA = this.spinAngles[phase.toIdx] * blendT;
@@ -1080,19 +1138,22 @@ void main() {`
         const cp = Math.cos(precA), sp = Math.sin(precA);
         const ct = Math.cos(tilt), st2 = Math.sin(tilt);
         const cs = Math.cos(spinA), ss = Math.sin(spinA);
-        stm00 = cp * ct * cs - sp * ss;
-        stm01 = -cp * st2;
-        stm02 = cp * ct * ss + sp * cs;
-        stm10 = st2 * cs;
-        stm11 = ct;
-        stm12 = st2 * ss;
-        stm20 = -sp * ct * cs - cp * ss;
-        stm21 = sp * st2;
-        stm22 = -sp * ct * ss + cp * cs;
+        m.m00 = cp * ct * cs - sp * ss;
+        m.m01 = -cp * st2;
+        m.m02 = cp * ct * ss + sp * cs;
+        m.m10 = st2 * cs;
+        m.m11 = ct;
+        m.m12 = st2 * ss;
+        m.m20 = -sp * ct * cs - cp * ss;
+        m.m21 = sp * st2;
+        m.m22 = -sp * ct * ss + cp * cs;
       }
     }
+    return m;
+  }
 
-    // --- Gravity settle timer update ---
+  /** Gravity settle timer update */
+  private updateGravityState(delta: number, phase: MorphPhase) {
     if (phase.type === 'hold') {
       const shape = this.shapeTargets[phase.shapeIdx];
       if (shape.enterTransition?.gravity) {
@@ -1117,6 +1178,358 @@ void main() {`
         this.gravityTriggered = false;
       }
     }
+  }
+
+  /** Compute base position for a single particle based on hold/transition phase */
+  private computeBasePosition(
+    i: number, i3: number, phase: MorphPhase, effectiveCenter: THREE.Vector3,
+  ): { x: number; y: number; z: number; isInactive: boolean } {
+    if (phase.type === 'hold') {
+      const shape = this.shapeTargets[phase.shapeIdx];
+      if (i >= shape.activeCount) {
+        // 비활성 파티클: 중심에 배치, 나중에 sizeMul=0
+        return { x: shape.worldOffset.x, y: shape.worldOffset.y, z: shape.worldOffset.z, isInactive: true };
+      }
+
+      let baseX = shape.positions[i3] + shape.worldOffset.x;
+      let baseY = shape.positions[i3 + 1] + shape.worldOffset.y;
+      let baseZ = shape.positions[i3 + 2] + shape.worldOffset.z;
+      // Apply holdScatter: add scatter offset to keep particles partially dispersed
+      if (shape.holdScatter > 0) {
+        baseX += this.scatterOffsets[i3] * shape.holdScatter;
+        baseY += this.scatterOffsets[i3 + 1] * shape.holdScatter;
+        baseZ += this.scatterOffsets[i3 + 2] * shape.holdScatter;
+      }
+      // Gravity settle: particles fall from above into position over time
+      if (this.gravityTriggered && this.gravityActiveShapeIdx === phase.shapeIdx) {
+        const enterTr = shape.enterTransition!;
+        const gravH = enterTr.gravityHeight ?? 8;
+        const settleDuration = enterTr.gravityDuration ?? 3.0;
+        // Per-particle stagger: scatter offset으로 각 파티클 낙하 시작 시간 다르게
+        const stagger = (this.scatterOffsets[i3] * 0.5 + 0.5) * 1.5; // 0~1.5초 지연
+        const particleTime = Math.max(0, this.gravitySettleTime - stagger);
+        const fallT = Math.min(1, particleTime / settleDuration);
+        // easeInQuad: 처음엔 천천히, 점점 가속 (자유낙하 느낌)
+        const fallProgress = fallT * fallT;
+        const yOffset = gravH * (1 - fallProgress);
+        baseY += yOffset;
+        // 낙하 중 흔들림 (감쇠 진동): 떨어지면서 XZ로 살짝 흔들리다 착지 시 멈춤
+        if (fallT < 1) {
+          const wobbleDecay = 1 - fallT; // 착지에 가까울수록 감소
+          const wobbleFreq = enterTr.gravityWobbleFreq ?? 4.0;
+          const wobbleAmp = 0.3 * wobbleDecay; // 최대 흔들림 반경
+          // 파티클마다 다른 위상으로 흔들리도록 scatter offset 활용
+          const phase1 = this.scatterOffsets[i3 + 1] * Math.PI * 2;
+          const phase2 = this.scatterOffsets[i3 + 2] * Math.PI * 2;
+          baseX += Math.sin(particleTime * wobbleFreq + phase1) * wobbleAmp;
+          baseZ += Math.cos(particleTime * wobbleFreq + phase2) * wobbleAmp;
+        }
+      }
+      return { x: baseX, y: baseY, z: baseZ, isInactive: false };
+    }
+
+    // Transition phase
+    const from = this.shapeTargets[phase.fromIdx];
+    const to = this.shapeTargets[phase.toIdx];
+    const t = this.smoothstep(phase.t);
+    const enterTr = to.enterTransition;
+    const fromActive = from.activeCount;
+    const toActive = to.activeCount;
+
+    if (i >= fromActive && i >= toActive) {
+      // 양쪽 모두 비활성
+      return { x: effectiveCenter.x, y: effectiveCenter.y, z: effectiveCenter.z, isInactive: true };
+    }
+
+    const fhs = from.holdScatter;
+    const ths = to.holdScatter;
+    const scatterScaleVal = enterTr?.scatterScale ?? particleConfig.scatterScale;
+
+    // from 위치 결정
+    let fX: number, fY: number, fZ: number;
+    if (i < fromActive) {
+      fX = from.positions[i3] + from.worldOffset.x + (fhs > 0 ? this.scatterOffsets[i3] * fhs : 0);
+      fY = from.positions[i3 + 1] + from.worldOffset.y + (fhs > 0 ? this.scatterOffsets[i3 + 1] * fhs : 0);
+      fZ = from.positions[i3 + 2] + from.worldOffset.z + (fhs > 0 ? this.scatterOffsets[i3 + 2] * fhs : 0);
+    } else {
+      // from에 없음 → to 위치에서 scatter 상태로 시작
+      fX = to.positions[i3] + to.worldOffset.x + this.scatterOffsets[i3] * scatterScaleVal * 5;
+      fY = to.positions[i3 + 1] + to.worldOffset.y + this.scatterOffsets[i3 + 1] * scatterScaleVal * 5;
+      fZ = to.positions[i3 + 2] + to.worldOffset.z + this.scatterOffsets[i3 + 2] * scatterScaleVal * 5;
+    }
+
+    // to 위치 결정
+    let tX: number, tY: number, tZ: number;
+    if (i < toActive) {
+      tX = to.positions[i3] + to.worldOffset.x + (ths > 0 ? this.scatterOffsets[i3] * ths : 0);
+      tY = to.positions[i3 + 1] + to.worldOffset.y + (ths > 0 ? this.scatterOffsets[i3 + 1] * ths : 0);
+      tZ = to.positions[i3 + 2] + to.worldOffset.z + (ths > 0 ? this.scatterOffsets[i3 + 2] * ths : 0);
+    } else {
+      // to에 없음 → from 위치에서 scatter로 퇴장
+      tX = from.positions[i3] + from.worldOffset.x + this.scatterOffsets[i3] * scatterScaleVal * 5;
+      tY = from.positions[i3 + 1] + from.worldOffset.y + this.scatterOffsets[i3 + 1] * scatterScaleVal * 5;
+      tZ = from.positions[i3 + 2] + from.worldOffset.z + this.scatterOffsets[i3 + 2] * scatterScaleVal * 5;
+    }
+
+    // Lerp between shapes
+    const lerpX = fX + (tX - fX) * t;
+    const lerpY = fY + (tY - fY) * t;
+    const lerpZ = fZ + (tZ - fZ) * t;
+
+    // Scatter: per-model override or default
+    const scatterAmount = Math.sin(phase.t * Math.PI) * scatterScaleVal;
+
+    let baseX = lerpX + this.scatterOffsets[i3] * scatterAmount;
+    let baseY = lerpY + this.scatterOffsets[i3 + 1] * scatterAmount;
+    let baseZ = lerpZ + this.scatterOffsets[i3 + 2] * scatterAmount;
+
+    // Gravity: during transition, lift particles to gravityHeight (fall happens in hold)
+    if (enterTr?.gravity) {
+      const gravH = enterTr.gravityHeight ?? 8;
+      // 전환 후반(t→1)에서 파티클이 높이 위치하도록
+      baseY += gravH * t;
+    }
+
+    // Rotation around effective center during transition (skip if noRotation)
+    if (particleConfig.transitionRotation && !enterTr?.noRotation) {
+      const cx = effectiveCenter.x;
+      // Rotate around Y axis (relative to effective center)
+      const angle = phase.t * particleConfig.transitionRotationSpeed * Math.PI * 2;
+      const rx = baseX - cx;
+      const rz = baseZ;
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
+      baseX = cx + rx * cosA - rz * sinA;
+      baseZ = rx * sinA + rz * cosA;
+    }
+
+    return { x: baseX, y: baseY, z: baseZ, isInactive: false };
+  }
+
+  /** Mouse push/attract, orbit, and size effect for a single particle */
+  private applyMouseInteraction(
+    i3: number, baseX: number, baseY: number, baseZ: number, mouseCtx: MouseContext,
+  ): { targetX: number; targetY: number; targetZ: number; hasTarget: boolean; sizeMul: number } {
+    let targetX = 0, targetY = 0, targetZ = 0;
+    let hasTarget = false;
+    let sizeMul = 1.0;
+
+    if (!mouseCtx.localMousePos) return { targetX, targetY, targetZ, hasTarget, sizeMul };
+
+    const dx = baseX - mouseCtx.localMousePos.x;
+    const dy = baseY - mouseCtx.localMousePos.y;
+    const dz = baseZ - mouseCtx.localMousePos.z;
+
+    const dot = dx * mouseCtx.camDirLocalX + dy * mouseCtx.camDirLocalY + dz * mouseCtx.camDirLocalZ;
+    const perpX = dx - dot * mouseCtx.camDirLocalX;
+    const perpY = dy - dot * mouseCtx.camDirLocalY;
+    const perpZ = dz - dot * mouseCtx.camDirLocalZ;
+    const perpDistSq = perpX * perpX + perpY * perpY + perpZ * perpZ;
+
+    if (perpDistSq < mouseCtx.mouseRadiusSq) {
+      const perpDist = Math.sqrt(perpDistSq);
+      const normalizedDist = perpDist / mouseCtx.scaledMouseRadius;
+      const dome = (1 + Math.cos(Math.PI * normalizedDist)) * 0.5;
+      const activity = this.mouseActivity;
+
+      if (perpDist > 0.001) {
+        const pushFactor = dome * particleConfig.mouseStrength * activity;
+        const invDist = 1 / perpDist;
+        const dir = particleConfig.mouseAttract ? -1 : 1;
+        targetX = dir * (perpX * invDist) * pushFactor * mouseCtx.scaledMouseRadius;
+        targetY = dir * (perpY * invDist) * pushFactor * mouseCtx.scaledMouseRadius;
+        targetZ = dir * (perpZ * invDist) * pushFactor * mouseCtx.scaledMouseRadius;
+      }
+
+      if (!particleConfig.mouseAttract && particleConfig.orbitStrength > 0 && perpDist > 0.001 && activity > 0.01) {
+        const tX = mouseCtx.camDirLocalY * perpZ - mouseCtx.camDirLocalZ * perpY;
+        const tY = mouseCtx.camDirLocalZ * perpX - mouseCtx.camDirLocalX * perpZ;
+        const tZ = mouseCtx.camDirLocalX * perpY - mouseCtx.camDirLocalY * perpX;
+        const tLen = Math.sqrt(tX * tX + tY * tY + tZ * tZ);
+
+        if (tLen > 0.001) {
+          const invLen = 1 / tLen;
+          const orbitPhase = this.scatterOffsets[i3] * 6.283;
+          const orbitVal = Math.sin(this.orbitTime * particleConfig.orbitSpeed + orbitPhase)
+            * dome * particleConfig.orbitStrength * mouseCtx.scaledMouseRadius * activity;
+          targetX += tX * invLen * orbitVal;
+          targetY += tY * invLen * orbitVal;
+          targetZ += tZ * invLen * orbitVal;
+        }
+      }
+
+      hasTarget = true;
+
+      if (particleConfig.mouseSizeEffect) {
+        const baseBulge = 0.3;
+        const sizeFactor = baseBulge + (1.0 - baseBulge) * activity;
+        sizeMul = 1.0 + dome * particleConfig.mouseSizeStrength * sizeFactor;
+      }
+    }
+
+    return { targetX, targetY, targetZ, hasTarget, sizeMul };
+  }
+
+  /** Compute size multiplier from height/radial/depth effects (with transition blending) */
+  private computeSizeMultiplier(
+    baseX: number, baseY: number, baseZ: number,
+    effectiveCenter: THREE.Vector3, ctx: PhaseContext,
+  ): number {
+    let sizeMul = 1.0;
+
+    // Height-based size effect (with transition blending)
+    if (ctx.activeHeightSize) {
+      const y = baseY - effectiveCenter.y;
+      const normalizedY = (y - ctx.activeHeightSize.yMin) / (ctx.activeHeightSize.yMax - ctx.activeHeightSize.yMin || 1);
+      const clampedY = Math.max(0, Math.min(1, normalizedY));
+      const isMobile = window.innerWidth < 768;
+      const minVal = (isMobile && ctx.activeHeightSize.mobileMin !== undefined) ? ctx.activeHeightSize.mobileMin : ctx.activeHeightSize.min;
+      const heightMul = minVal + (ctx.activeHeightSize.max - minVal) * clampedY;
+      sizeMul *= heightMul;
+    } else if (ctx.transFromHeightSize || ctx.transToHeightSize) {
+      // Blend from/to heightSize during transition
+      let heightBlend = 1.0;
+      if (ctx.transFromHeightSize) {
+        const y = baseY - effectiveCenter.y;
+        const normalizedY = (y - ctx.transFromHeightSize.yMin) / (ctx.transFromHeightSize.yMax - ctx.transFromHeightSize.yMin || 1);
+        const clampedY = Math.max(0, Math.min(1, normalizedY));
+        const isMobile = window.innerWidth < 768;
+        const minVal = (isMobile && ctx.transFromHeightSize.mobileMin !== undefined) ? ctx.transFromHeightSize.mobileMin : ctx.transFromHeightSize.min;
+        const fromMul = minVal + (ctx.transFromHeightSize.max - minVal) * clampedY;
+        heightBlend *= 1.0 + (fromMul - 1.0) * (1 - ctx.transSizeBlend); // fade out
+      }
+      if (ctx.transToHeightSize) {
+        const y = baseY - effectiveCenter.y;
+        const normalizedY = (y - ctx.transToHeightSize.yMin) / (ctx.transToHeightSize.yMax - ctx.transToHeightSize.yMin || 1);
+        const clampedY = Math.max(0, Math.min(1, normalizedY));
+        const isMobile = window.innerWidth < 768;
+        const minVal = (isMobile && ctx.transToHeightSize.mobileMin !== undefined) ? ctx.transToHeightSize.mobileMin : ctx.transToHeightSize.min;
+        const toMul = minVal + (ctx.transToHeightSize.max - minVal) * clampedY;
+        heightBlend *= 1.0 + (toMul - 1.0) * ctx.transSizeBlend; // fade in
+      }
+      sizeMul *= heightBlend;
+    }
+
+    // Radial distance-based size effect (중심축에 가까울수록 작게, with transition blending)
+    if (ctx.activeRadialSize) {
+      const rx = baseX - effectiveCenter.x;
+      const rz = baseZ - effectiveCenter.z;
+      const radialDist = Math.sqrt(rx * rx + rz * rz);
+      const normalizedR = Math.min(1, radialDist / (ctx.activeRadialSize.maxRadius || 1));
+      const radialMul = ctx.activeRadialSize.min + (ctx.activeRadialSize.max - ctx.activeRadialSize.min) * normalizedR;
+      sizeMul *= radialMul;
+    } else if (ctx.transFromRadialSize || ctx.transToRadialSize) {
+      let radialBlend = 1.0;
+      if (ctx.transFromRadialSize) {
+        const rx = baseX - effectiveCenter.x;
+        const rz = baseZ - effectiveCenter.z;
+        const radialDist = Math.sqrt(rx * rx + rz * rz);
+        const normalizedR = Math.min(1, radialDist / (ctx.transFromRadialSize.maxRadius || 1));
+        const fromMul = ctx.transFromRadialSize.min + (ctx.transFromRadialSize.max - ctx.transFromRadialSize.min) * normalizedR;
+        radialBlend *= 1.0 + (fromMul - 1.0) * (1 - ctx.transSizeBlend);
+      }
+      if (ctx.transToRadialSize) {
+        const rx = baseX - effectiveCenter.x;
+        const rz = baseZ - effectiveCenter.z;
+        const radialDist = Math.sqrt(rx * rx + rz * rz);
+        const normalizedR = Math.min(1, radialDist / (ctx.transToRadialSize.maxRadius || 1));
+        const toMul = ctx.transToRadialSize.min + (ctx.transToRadialSize.max - ctx.transToRadialSize.min) * normalizedR;
+        radialBlend *= 1.0 + (toMul - 1.0) * ctx.transSizeBlend;
+      }
+      sizeMul *= radialBlend;
+    }
+
+    // Depth (Z) based size effect (먼쪽=min, 가까운쪽=max, with transition blending)
+    if (ctx.activeDepthSize) {
+      const z = baseZ - effectiveCenter.z;
+      const normalizedZ = (z - ctx.activeDepthSize.zMin) / (ctx.activeDepthSize.zMax - ctx.activeDepthSize.zMin || 1);
+      const clampedZ = Math.max(0, Math.min(1, normalizedZ));
+      const depthMul = ctx.activeDepthSize.min + (ctx.activeDepthSize.max - ctx.activeDepthSize.min) * clampedZ;
+      sizeMul *= depthMul;
+    } else if (ctx.transFromDepthSize || ctx.transToDepthSize) {
+      let depthBlend = 1.0;
+      if (ctx.transFromDepthSize) {
+        const z = baseZ - effectiveCenter.z;
+        const normalizedZ = (z - ctx.transFromDepthSize.zMin) / (ctx.transFromDepthSize.zMax - ctx.transFromDepthSize.zMin || 1);
+        const clampedZ = Math.max(0, Math.min(1, normalizedZ));
+        const fromMul = ctx.transFromDepthSize.min + (ctx.transFromDepthSize.max - ctx.transFromDepthSize.min) * clampedZ;
+        depthBlend *= 1.0 + (fromMul - 1.0) * (1 - ctx.transSizeBlend);
+      }
+      if (ctx.transToDepthSize) {
+        const z = baseZ - effectiveCenter.z;
+        const normalizedZ = (z - ctx.transToDepthSize.zMin) / (ctx.transToDepthSize.zMax - ctx.transToDepthSize.zMin || 1);
+        const clampedZ = Math.max(0, Math.min(1, normalizedZ));
+        const toMul = ctx.transToDepthSize.min + (ctx.transToDepthSize.max - ctx.transToDepthSize.min) * clampedZ;
+        depthBlend *= 1.0 + (toMul - 1.0) * ctx.transSizeBlend;
+      }
+      sizeMul *= depthBlend;
+    }
+
+    return sizeMul;
+  }
+
+  /** Mark geometry buffer attributes as needing update */
+  private updateGeometryBuffers() {
+    if (!this.points) return;
+    const posAttr = this.points.geometry.getAttribute('position') as THREE.BufferAttribute;
+    posAttr.needsUpdate = true;
+    const mulAttr = this.points.geometry.getAttribute('mouseMul') as THREE.BufferAttribute;
+    if (mulAttr) mulAttr.needsUpdate = true;
+    if (this.usePerParticleCenterUniform.value > 0) {
+      const centerAttr = this.points.geometry.getAttribute('particleCenter') as THREE.BufferAttribute;
+      if (centerAttr) centerAttr.needsUpdate = true;
+    }
+  }
+
+  // =====================================================================
+  // Main update — orchestration of extracted methods
+  // =====================================================================
+
+  update(delta: number, scrollProgress: number, mouseWorldPos: THREE.Vector3 | null, mouseNorm?: THREE.Vector2, mouseSpeed?: number) {
+    if (!this.points || this.shapeTargets.length === 0) return;
+
+    // Call per-shape animation updaters (e.g., walking FBX)
+    for (const [, updater] of this.shapeUpdaters) {
+      updater(delta, scrollProgress);
+    }
+
+    // Sync depth uniforms
+    this.depthNearMulUniform.value = particleConfig.depthNearMul;
+    this.depthFarMulUniform.value = particleConfig.depthFarMul;
+
+    // Update scale
+    this.points.scale.setScalar(this._userScale);
+
+    this.updateAutoRotation(delta, scrollProgress);
+    this.updateLightingUniforms(scrollProgress);
+    this.updateSpinTopAngles(delta);
+    this.updateParallax(mouseNorm);
+
+    // --- Intro animation: particles gather to form first shape ---
+    if (this.updateIntroAnimation(delta)) return;
+
+    // Get current morph phase
+    const phase = this.getPhase(scrollProgress);
+
+    // Compute effective center and depth bounds for shader
+    const ctx = this.computePhaseContext(phase);
+    const effectiveCenter = ctx.effectiveCenter;
+
+    // --- Mouse interaction setup ---
+    const mouseCtx = this.computeMouseContext(mouseWorldPos, effectiveCenter, mouseSpeed);
+
+    const useSpring = particleConfig.springEnabled;
+    const stiffness = particleConfig.springStiffness;
+    const damping = particleConfig.springDamping;
+    const clampedDelta = Math.min(delta, 0.033);
+
+    this.orbitTime += delta;
+
+    // Precompute spinTop rotation matrix for active shape
+    const stm = this.computeSpinTopMatrix(phase);
+
+    // --- Gravity settle timer update ---
+    this.updateGravityState(delta, phase);
 
     // --- Per-particle position computation (activeCount 기반 최적화) ---
     let loopCount: number;
@@ -1132,134 +1545,11 @@ void main() {`
       const i3 = i * 3;
 
       // Compute base position based on phase
-      let baseX: number, baseY: number, baseZ: number;
-      let isInactive = false; // 이 파티클이 현재 phase에서 비활성인지
-
-      if (phase.type === 'hold') {
-        const shape = this.shapeTargets[phase.shapeIdx];
-        if (i >= shape.activeCount) {
-          // 비활성 파티클: 중심에 배치, 나중에 sizeMul=0
-          baseX = shape.worldOffset.x;
-          baseY = shape.worldOffset.y;
-          baseZ = shape.worldOffset.z;
-          isInactive = true;
-        } else {
-          baseX = shape.positions[i3] + shape.worldOffset.x;
-          baseY = shape.positions[i3 + 1] + shape.worldOffset.y;
-          baseZ = shape.positions[i3 + 2] + shape.worldOffset.z;
-          // Apply holdScatter: add scatter offset to keep particles partially dispersed
-          if (shape.holdScatter > 0) {
-            baseX += this.scatterOffsets[i3] * shape.holdScatter;
-            baseY += this.scatterOffsets[i3 + 1] * shape.holdScatter;
-            baseZ += this.scatterOffsets[i3 + 2] * shape.holdScatter;
-          }
-          // Gravity settle: particles fall from above into position over time
-          if (this.gravityTriggered && this.gravityActiveShapeIdx === phase.shapeIdx) {
-            const enterTr = shape.enterTransition!;
-            const gravH = enterTr.gravityHeight ?? 8;
-            const settleDuration = enterTr.gravityDuration ?? 3.0;
-            // Per-particle stagger: scatter offset으로 각 파티클 낙하 시작 시간 다르게
-            const stagger = (this.scatterOffsets[i3] * 0.5 + 0.5) * 1.5; // 0~1.5초 지연
-            const particleTime = Math.max(0, this.gravitySettleTime - stagger);
-            const fallT = Math.min(1, particleTime / settleDuration);
-            // easeInQuad: 처음엔 천천히, 점점 가속 (자유낙하 느낌)
-            const fallProgress = fallT * fallT;
-            const yOffset = gravH * (1 - fallProgress);
-            baseY += yOffset;
-            // 낙하 중 흔들림 (감쇠 진동): 떨어지면서 XZ로 살짝 흔들리다 착지 시 멈춤
-            if (fallT < 1) {
-              const wobbleDecay = 1 - fallT; // 착지에 가까울수록 감소
-              const wobbleFreq = enterTr.gravityWobbleFreq ?? 4.0;
-              const wobbleAmp = 0.3 * wobbleDecay; // 최대 흔들림 반경
-              // 파티클마다 다른 위상으로 흔들리도록 scatter offset 활용
-              const phase1 = this.scatterOffsets[i3 + 1] * Math.PI * 2;
-              const phase2 = this.scatterOffsets[i3 + 2] * Math.PI * 2;
-              baseX += Math.sin(particleTime * wobbleFreq + phase1) * wobbleAmp;
-              baseZ += Math.cos(particleTime * wobbleFreq + phase2) * wobbleAmp;
-            }
-          }
-        }
-      } else {
-        const from = this.shapeTargets[phase.fromIdx];
-        const to = this.shapeTargets[phase.toIdx];
-        const t = this.smoothstep(phase.t);
-        const enterTr = to.enterTransition;
-        const fromActive = from.activeCount;
-        const toActive = to.activeCount;
-
-        if (i >= fromActive && i >= toActive) {
-          // 양쪽 모두 비활성
-          baseX = effectiveCenter.x;
-          baseY = effectiveCenter.y;
-          baseZ = effectiveCenter.z;
-          isInactive = true;
-        } else {
-          const fhs = from.holdScatter;
-          const ths = to.holdScatter;
-          const scatterScaleVal = enterTr?.scatterScale ?? particleConfig.scatterScale;
-
-          // from 위치 결정
-          let fX: number, fY: number, fZ: number;
-          if (i < fromActive) {
-            fX = from.positions[i3] + from.worldOffset.x + (fhs > 0 ? this.scatterOffsets[i3] * fhs : 0);
-            fY = from.positions[i3 + 1] + from.worldOffset.y + (fhs > 0 ? this.scatterOffsets[i3 + 1] * fhs : 0);
-            fZ = from.positions[i3 + 2] + from.worldOffset.z + (fhs > 0 ? this.scatterOffsets[i3 + 2] * fhs : 0);
-          } else {
-            // from에 없음 → to 위치에서 scatter 상태로 시작
-            fX = to.positions[i3] + to.worldOffset.x + this.scatterOffsets[i3] * scatterScaleVal * 5;
-            fY = to.positions[i3 + 1] + to.worldOffset.y + this.scatterOffsets[i3 + 1] * scatterScaleVal * 5;
-            fZ = to.positions[i3 + 2] + to.worldOffset.z + this.scatterOffsets[i3 + 2] * scatterScaleVal * 5;
-          }
-
-          // to 위치 결정
-          let tX: number, tY: number, tZ: number;
-          if (i < toActive) {
-            tX = to.positions[i3] + to.worldOffset.x + (ths > 0 ? this.scatterOffsets[i3] * ths : 0);
-            tY = to.positions[i3 + 1] + to.worldOffset.y + (ths > 0 ? this.scatterOffsets[i3 + 1] * ths : 0);
-            tZ = to.positions[i3 + 2] + to.worldOffset.z + (ths > 0 ? this.scatterOffsets[i3 + 2] * ths : 0);
-          } else {
-            // to에 없음 → from 위치에서 scatter로 퇴장
-            tX = from.positions[i3] + from.worldOffset.x + this.scatterOffsets[i3] * scatterScaleVal * 5;
-            tY = from.positions[i3 + 1] + from.worldOffset.y + this.scatterOffsets[i3 + 1] * scatterScaleVal * 5;
-            tZ = from.positions[i3 + 2] + from.worldOffset.z + this.scatterOffsets[i3 + 2] * scatterScaleVal * 5;
-          }
-
-          // Lerp between shapes
-          const lerpX = fX + (tX - fX) * t;
-          const lerpY = fY + (tY - fY) * t;
-          const lerpZ = fZ + (tZ - fZ) * t;
-
-          // Scatter: per-model override or default
-          const scatterAmount = Math.sin(phase.t * Math.PI) * scatterScaleVal;
-
-          baseX = lerpX + this.scatterOffsets[i3] * scatterAmount;
-          baseY = lerpY + this.scatterOffsets[i3 + 1] * scatterAmount;
-          baseZ = lerpZ + this.scatterOffsets[i3 + 2] * scatterAmount;
-
-          // Gravity: during transition, lift particles to gravityHeight (fall happens in hold)
-          if (enterTr?.gravity) {
-            const gravH = enterTr.gravityHeight ?? 8;
-            // 전환 후반(t→1)에서 파티클이 높이 위치하도록
-            baseY += gravH * t;
-          }
-
-          // Rotation around effective center during transition (skip if noRotation)
-          if (particleConfig.transitionRotation && !enterTr?.noRotation) {
-            const cx = effectiveCenter.x;
-            // Rotate around Y axis (relative to effective center)
-            const angle = phase.t * particleConfig.transitionRotationSpeed * Math.PI * 2;
-            const rx = baseX - cx;
-            const rz = baseZ;
-            const cosA = Math.cos(angle);
-            const sinA = Math.sin(angle);
-            baseX = cx + rx * cosA - rz * sinA;
-            baseZ = rx * sinA + rz * cosA;
-          }
-        }
-      }
+      const base = this.computeBasePosition(i, i3, phase, effectiveCenter);
+      let baseX = base.x, baseY = base.y, baseZ = base.z;
 
       // 비활성 파티클: 빠르게 sizeMul→0, 위치는 중심
-      if (isInactive) {
+      if (base.isInactive) {
         this.sizeMultipliers[i] += (0 - this.sizeMultipliers[i]) * 0.3;
         this.currentPositions[i3] = baseX;
         this.currentPositions[i3 + 1] = baseY;
@@ -1268,7 +1558,7 @@ void main() {`
       }
 
       // SpinTop rotation (팽이: spin + precession + nutation)
-      if (spinTopShapeIdx >= 0) {
+      if (stm.shapeIdx >= 0) {
         // Rotate around shape center (local coords, before worldOffset)
         const cx = effectiveCenter.x;
         const cy = effectiveCenter.y;
@@ -1276,9 +1566,9 @@ void main() {`
         const lx = baseX - cx;
         const ly = baseY - cy;
         const lz = baseZ - cz;
-        baseX = cx + stm00 * lx + stm01 * ly + stm02 * lz;
-        baseY = cy + stm10 * lx + stm11 * ly + stm12 * lz;
-        baseZ = cz + stm20 * lx + stm21 * ly + stm22 * lz;
+        baseX = cx + stm.m00 * lx + stm.m01 * ly + stm.m02 * lz;
+        baseY = cy + stm.m10 * lx + stm.m11 * ly + stm.m12 * lz;
+        baseZ = cz + stm.m20 * lx + stm.m21 * ly + stm.m22 * lz;
       }
 
       // Auto-rotation around effective center (Y axis)
@@ -1291,10 +1581,12 @@ void main() {`
         baseZ = effectiveCenter.z + arx * arSin + arz * arCos;
       }
 
-      // --- Mouse interaction (same logic as ModelShape) ---
-      let targetX = 0, targetY = 0, targetZ = 0;
-      let hasTarget = false;
-      let sizeMulTarget = 1.0;
+      // --- Mouse interaction ---
+      const mouseResult = this.applyMouseInteraction(i3, baseX, baseY, baseZ, mouseCtx);
+      let { targetX, targetY, targetZ } = mouseResult;
+      const hasTarget = mouseResult.hasTarget;
+
+      let sizeMulTarget = mouseResult.sizeMul;
 
       // 전환 시 파티클 수 차이에 따른 size fade
       if (phase.type === 'transition') {
@@ -1305,146 +1597,8 @@ void main() {`
         if (i >= toActive) sizeMulTarget *= (1 - t);    // fade out (1→0)
       }
 
-      if (localMousePos) {
-        const dx = baseX - localMousePos.x;
-        const dy = baseY - localMousePos.y;
-        const dz = baseZ - localMousePos.z;
-
-        const dot = dx * camDirLocalX + dy * camDirLocalY + dz * camDirLocalZ;
-        const perpX = dx - dot * camDirLocalX;
-        const perpY = dy - dot * camDirLocalY;
-        const perpZ = dz - dot * camDirLocalZ;
-        const perpDistSq = perpX * perpX + perpY * perpY + perpZ * perpZ;
-
-        if (perpDistSq < mouseRadiusSq) {
-          const perpDist = Math.sqrt(perpDistSq);
-          const normalizedDist = perpDist / scaledMouseRadius;
-          const dome = (1 + Math.cos(Math.PI * normalizedDist)) * 0.5;
-          const activity = this.mouseActivity;
-
-          if (perpDist > 0.001) {
-            const pushFactor = dome * particleConfig.mouseStrength * activity;
-            const invDist = 1 / perpDist;
-            const dir = particleConfig.mouseAttract ? -1 : 1;
-            targetX = dir * (perpX * invDist) * pushFactor * scaledMouseRadius;
-            targetY = dir * (perpY * invDist) * pushFactor * scaledMouseRadius;
-            targetZ = dir * (perpZ * invDist) * pushFactor * scaledMouseRadius;
-          }
-
-          if (!particleConfig.mouseAttract && particleConfig.orbitStrength > 0 && perpDist > 0.001 && activity > 0.01) {
-            const tX = camDirLocalY * perpZ - camDirLocalZ * perpY;
-            const tY = camDirLocalZ * perpX - camDirLocalX * perpZ;
-            const tZ = camDirLocalX * perpY - camDirLocalY * perpX;
-            const tLen = Math.sqrt(tX * tX + tY * tY + tZ * tZ);
-
-            if (tLen > 0.001) {
-              const invLen = 1 / tLen;
-              const orbitPhase = this.scatterOffsets[i3] * 6.283;
-              const orbitVal = Math.sin(this.orbitTime * particleConfig.orbitSpeed + orbitPhase)
-                * dome * particleConfig.orbitStrength * scaledMouseRadius * activity;
-              targetX += tX * invLen * orbitVal;
-              targetY += tY * invLen * orbitVal;
-              targetZ += tZ * invLen * orbitVal;
-            }
-          }
-
-          hasTarget = true;
-
-          if (particleConfig.mouseSizeEffect) {
-            const baseBulge = 0.3;
-            const sizeFactor = baseBulge + (1.0 - baseBulge) * activity;
-            sizeMulTarget *= 1.0 + dome * particleConfig.mouseSizeStrength * sizeFactor;
-          }
-        }
-      }
-
-      // Height-based size effect (with transition blending)
-      if (activeHeightSize) {
-        const y = baseY - effectiveCenter.y;
-        const normalizedY = (y - activeHeightSize.yMin) / (activeHeightSize.yMax - activeHeightSize.yMin || 1);
-        const clampedY = Math.max(0, Math.min(1, normalizedY));
-        const isMobile = window.innerWidth < 768;
-        const minVal = (isMobile && activeHeightSize.mobileMin !== undefined) ? activeHeightSize.mobileMin : activeHeightSize.min;
-        const heightMul = minVal + (activeHeightSize.max - minVal) * clampedY;
-        sizeMulTarget *= heightMul;
-      } else if (phase.type === 'transition') {
-        // Blend from/to heightSize during transition
-        let heightBlend = 1.0;
-        if (transFromHeightSize) {
-          const y = baseY - effectiveCenter.y;
-          const normalizedY = (y - transFromHeightSize.yMin) / (transFromHeightSize.yMax - transFromHeightSize.yMin || 1);
-          const clampedY = Math.max(0, Math.min(1, normalizedY));
-          const isMobile = window.innerWidth < 768;
-          const minVal = (isMobile && transFromHeightSize.mobileMin !== undefined) ? transFromHeightSize.mobileMin : transFromHeightSize.min;
-          const fromMul = minVal + (transFromHeightSize.max - minVal) * clampedY;
-          heightBlend *= 1.0 + (fromMul - 1.0) * (1 - transSizeBlend); // fade out
-        }
-        if (transToHeightSize) {
-          const y = baseY - effectiveCenter.y;
-          const normalizedY = (y - transToHeightSize.yMin) / (transToHeightSize.yMax - transToHeightSize.yMin || 1);
-          const clampedY = Math.max(0, Math.min(1, normalizedY));
-          const isMobile = window.innerWidth < 768;
-          const minVal = (isMobile && transToHeightSize.mobileMin !== undefined) ? transToHeightSize.mobileMin : transToHeightSize.min;
-          const toMul = minVal + (transToHeightSize.max - minVal) * clampedY;
-          heightBlend *= 1.0 + (toMul - 1.0) * transSizeBlend; // fade in
-        }
-        sizeMulTarget *= heightBlend;
-      }
-
-      // Radial distance-based size effect (중심축에 가까울수록 작게, with transition blending)
-      if (activeRadialSize) {
-        const rx = baseX - effectiveCenter.x;
-        const rz = baseZ - effectiveCenter.z;
-        const radialDist = Math.sqrt(rx * rx + rz * rz);
-        const normalizedR = Math.min(1, radialDist / (activeRadialSize.maxRadius || 1));
-        const radialMul = activeRadialSize.min + (activeRadialSize.max - activeRadialSize.min) * normalizedR;
-        sizeMulTarget *= radialMul;
-      } else if (phase.type === 'transition') {
-        let radialBlend = 1.0;
-        if (transFromRadialSize) {
-          const rx = baseX - effectiveCenter.x;
-          const rz = baseZ - effectiveCenter.z;
-          const radialDist = Math.sqrt(rx * rx + rz * rz);
-          const normalizedR = Math.min(1, radialDist / (transFromRadialSize.maxRadius || 1));
-          const fromMul = transFromRadialSize.min + (transFromRadialSize.max - transFromRadialSize.min) * normalizedR;
-          radialBlend *= 1.0 + (fromMul - 1.0) * (1 - transSizeBlend);
-        }
-        if (transToRadialSize) {
-          const rx = baseX - effectiveCenter.x;
-          const rz = baseZ - effectiveCenter.z;
-          const radialDist = Math.sqrt(rx * rx + rz * rz);
-          const normalizedR = Math.min(1, radialDist / (transToRadialSize.maxRadius || 1));
-          const toMul = transToRadialSize.min + (transToRadialSize.max - transToRadialSize.min) * normalizedR;
-          radialBlend *= 1.0 + (toMul - 1.0) * transSizeBlend;
-        }
-        sizeMulTarget *= radialBlend;
-      }
-
-      // Depth (Z) based size effect (먼쪽=min, 가까운쪽=max, with transition blending)
-      if (activeDepthSize) {
-        const z = baseZ - effectiveCenter.z;
-        const normalizedZ = (z - activeDepthSize.zMin) / (activeDepthSize.zMax - activeDepthSize.zMin || 1);
-        const clampedZ = Math.max(0, Math.min(1, normalizedZ));
-        const depthMul = activeDepthSize.min + (activeDepthSize.max - activeDepthSize.min) * clampedZ;
-        sizeMulTarget *= depthMul;
-      } else if (phase.type === 'transition') {
-        let depthBlend = 1.0;
-        if (transFromDepthSize) {
-          const z = baseZ - effectiveCenter.z;
-          const normalizedZ = (z - transFromDepthSize.zMin) / (transFromDepthSize.zMax - transFromDepthSize.zMin || 1);
-          const clampedZ = Math.max(0, Math.min(1, normalizedZ));
-          const fromMul = transFromDepthSize.min + (transFromDepthSize.max - transFromDepthSize.min) * clampedZ;
-          depthBlend *= 1.0 + (fromMul - 1.0) * (1 - transSizeBlend);
-        }
-        if (transToDepthSize) {
-          const z = baseZ - effectiveCenter.z;
-          const normalizedZ = (z - transToDepthSize.zMin) / (transToDepthSize.zMax - transToDepthSize.zMin || 1);
-          const clampedZ = Math.max(0, Math.min(1, normalizedZ));
-          const toMul = transToDepthSize.min + (transToDepthSize.max - transToDepthSize.min) * clampedZ;
-          depthBlend *= 1.0 + (toMul - 1.0) * transSizeBlend;
-        }
-        sizeMulTarget *= depthBlend;
-      }
+      // Height/Radial/Depth size effects
+      sizeMulTarget *= this.computeSizeMultiplier(baseX, baseY, baseZ, effectiveCenter, ctx);
 
       // Smooth size multiplier
       const sizeRate = sizeMulTarget > this.sizeMultipliers[i] ? 0.15 : 0.3;
@@ -1498,14 +1652,7 @@ void main() {`
     }
 
     // Update geometry buffers
-    const posAttr = this.points.geometry.getAttribute('position') as THREE.BufferAttribute;
-    posAttr.needsUpdate = true;
-    const mulAttr = this.points.geometry.getAttribute('mouseMul') as THREE.BufferAttribute;
-    if (mulAttr) mulAttr.needsUpdate = true;
-    if (this.usePerParticleCenterUniform.value > 0) {
-      const centerAttr = this.points.geometry.getAttribute('particleCenter') as THREE.BufferAttribute;
-      if (centerAttr) centerAttr.needsUpdate = true;
-    }
+    this.updateGeometryBuffers();
   }
 
   dispose() {
