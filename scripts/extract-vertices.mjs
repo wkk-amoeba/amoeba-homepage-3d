@@ -21,7 +21,7 @@ const MODELS = [
   { name: 'low_sphere', file: 'low_sphere.glb' },
   { name: 'low_cube', file: 'low_cube.glb' },
   { name: 'low_cone', file: 'low_cone.glb' },
-  { name: 'high_shpere', file: 'high_shpere.glb' },
+  { name: 'high_shpere', file: 'high_shpere.glb', fibonacciSphere: true },
   { name: 'high_cube', file: 'high_cube.glb' },
   { name: 'high_cone', file: 'high_cone.glb' },
   { name: 'city_test', file: 'city_test.glb' },
@@ -258,6 +258,27 @@ function centerPoints(sampled) {
 }
 
 // -------------------------------------------------------------------
+// Fibonacci sphere: nearly uniform point distribution on unit sphere
+// -------------------------------------------------------------------
+
+function generateFibonacciSphere(count, radius = 1.0) {
+  const sampled = [];
+  const goldenAngle = Math.PI * (3 - Math.sqrt(5)); // ~2.399963
+  for (let i = 0; i < count; i++) {
+    // y goes from 1 to -1 (uniform spacing along Y axis)
+    const y = 1 - (2 * i) / (count - 1);
+    const r = Math.sqrt(1 - y * y);
+    const theta = goldenAngle * i;
+    sampled.push(
+      Math.cos(theta) * r * radius,
+      y * radius,
+      Math.sin(theta) * r * radius,
+    );
+  }
+  return sampled;
+}
+
+// -------------------------------------------------------------------
 // Main
 // -------------------------------------------------------------------
 
@@ -275,6 +296,22 @@ async function main() {
   fs.mkdirSync(outputDir, { recursive: true });
 
   for (const model of MODELS) {
+    const targetCount = model.maxVertices || MAX_VERTICES;
+    const binName = (model.binName || model.file).replace('.glb', '.bin');
+    const outPath = path.join(outputDir, binName);
+
+    // Fibonacci sphere: generate uniform points without GLB
+    if (model.fibonacciSphere) {
+      const sampled = generateFibonacciSphere(targetCount);
+      // No centering needed — already centered at origin
+      const float32 = new Float32Array(sampled);
+      fs.writeFileSync(outPath, Buffer.from(float32.buffer));
+      console.log(
+        `  ${model.name}: ${targetCount} points (fibonacci sphere), ${float32.byteLength} bytes → ${binName}`
+      );
+      continue;
+    }
+
     const glbPath = path.join(modelsDir, model.file);
 
     if (!fs.existsSync(glbPath)) {
@@ -308,13 +345,10 @@ async function main() {
       console.log(`    heightCutoff ${model.heightCutoff}: ${triangles.length} → ${filteredTriangles.length} triangles`);
     }
 
-    const targetCount = model.maxVertices || MAX_VERTICES;
     const sampled = sampleTriangleSurface(filteredTriangles, targetCount, model.heightBias || null);
     centerPoints(sampled);
     const float32 = new Float32Array(sampled);
     const sampledCount = sampled.length / 3;
-    const binName = (model.binName || model.file).replace('.glb', '.bin');
-    const outPath = path.join(outputDir, binName);
 
     fs.writeFileSync(outPath, Buffer.from(float32.buffer));
 

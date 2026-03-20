@@ -164,6 +164,7 @@ export class SceneManager {
       this.particleMorpher.update(delta, scrollProgress, this.mouseWorldPos, this.mouse, this.mouseSpeed);
       this.background.setObjectCenter(this.particleMorpher.getEffectiveCenter());
     }
+    this.background.updateParallax(this.mouse);
     this.background.update(delta);
 
     // Update dome debug disc

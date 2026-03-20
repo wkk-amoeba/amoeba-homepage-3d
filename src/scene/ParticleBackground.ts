@@ -6,13 +6,17 @@ import { backgroundConfig, particleConfig, getAdjustedParticleCount } from '../c
 export class ParticleBackground {
   private points: THREE.Points;
   private lightDirUniform: { value: THREE.Vector3 };
-  private lightAmbientUniform = { value: particleConfig.lightAmbient };
-  private lightDiffuseUniform = { value: particleConfig.lightDiffuse };
+  private lightAmbientUniform = { value: backgroundConfig.lightAmbient };
+  private lightDiffuseUniform = { value: backgroundConfig.lightDiffuse };
 
   // Exclusion zone uniforms
   private objectCenterUniform = { value: new THREE.Vector3(0, 0, 2) };
   private exclusionRadiusUniform = { value: backgroundConfig.exclusionRadius };
   private exclusionFadeUniform = { value: backgroundConfig.exclusionFade };
+
+  // Parallax rotation (synced with object particles)
+  private parallaxRotX = 0;
+  private parallaxRotY = 0;
 
   // Fade-in animation (triggered by intro-gather-threshold event)
   private fadeStarted = false;
@@ -160,6 +164,19 @@ void main() {`
 
   setLightAmbient(v: number) { this.lightAmbientUniform.value = v; }
   setLightDiffuse(v: number) { this.lightDiffuseUniform.value = v; }
+
+  /** Update parallax rotation from normalized mouse position */
+  updateParallax(mouseNorm?: THREE.Vector2) {
+    const pStr = particleConfig.parallaxStrength;
+    if (mouseNorm) {
+      this.parallaxRotX += (-mouseNorm.y * pStr - this.parallaxRotX) * 0.05;
+      this.parallaxRotY += (mouseNorm.x * pStr - this.parallaxRotY) * 0.05;
+    } else {
+      this.parallaxRotX *= 0.95;
+      this.parallaxRotY *= 0.95;
+    }
+    this.points.rotation.set(this.parallaxRotX, this.parallaxRotY, 0);
+  }
 
   update(delta: number) {
     // Flow right-to-left with wrap-around (stays behind object)
