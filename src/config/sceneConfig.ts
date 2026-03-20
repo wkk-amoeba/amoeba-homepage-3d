@@ -84,7 +84,7 @@ export const models: ModelData[] = [
   // 씬 03: Gyro
   { id: 1, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.6, position: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, radialSize: { min: 0.5, max: 0.6 }, spinTop: { tilt: 0, spinSpeed: 0.3, precessionSpeed: 0.4, nutationAmp: 0.3491, nutationSpeed: 1.5, pivotY: -4 }, enterTransition: { noRotation: false, scatterScale: 0.03 }, lighting: { ambient: 0.1, diffuse: 1.0, specular: 6.0, shininess: 3.0 } },
   // 씬 04: Human — precomputedPositions는 런타임에 주입
-  { id: 2, name: 'Human', scale: 0.35, position: [0, -1.4, 0], holdScatter: 0.006, lighting: { ambient: 0.05, diffuse: 0.2, specular: 0, shininess: 2.0 } },
+  { id: 2, name: 'Human', scale: 1.6, position: [0, 0, 0], rotation: [-1.5708, 1.5708, 0], holdScatter: 0.000, autoRotateSpeed: 0, depthSize: { min: 0.1, max: 0.7 }, lighting: { ambient: 0.1, diffuse: 0.2, specular: 1.0, shininess: 2.0 } },
 ];
 
 // 파티클 렌더링 모드

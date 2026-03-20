@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Walking animation
     if (walkData && humanModel) {
       const humanIdx = models.indexOf(humanModel);
-      registerWalkingUpdater(morpher, humanIdx, walkData, humanModel.scale);
+      registerWalkingUpdater(morpher, humanIdx, walkData, humanModel.scale, humanModel.rotation);
     }
 
     // Unified sphere: scroll-driven effect interpolation (deform → metaball → linear)

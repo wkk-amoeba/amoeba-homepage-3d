@@ -122,6 +122,7 @@ export function registerWalkingUpdater(
   shapeIdx: number,
   walkData: FBXWalkingData,
   modelScale: number,
+  rotation?: [number, number, number],
 ) {
   const shapeTargets = morpher.getShapeTargets();
   const humanShape = shapeTargets[shapeIdx];
@@ -134,6 +135,11 @@ export function registerWalkingUpdater(
   const finalScale = normalizeScale * modelScale;
   const posAttr = mesh.geometry.attributes.position;
   const target = new THREE.Vector3();
+
+  // Pre-compute rotation matrix if rotation is specified
+  const rotMat = rotation
+    ? new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(rotation[0], rotation[1], rotation[2]))
+    : null;
 
   const numSamples = sampleIndices.length;
   const totalParticles = humanShape.positions.length / 3;
@@ -150,9 +156,14 @@ export function registerWalkingUpdater(
       mesh.applyBoneTransform(vertIdx, target);
       target.applyMatrix4(mesh.matrixWorld);
 
-      positions[j * 3] = target.x * finalScale;
-      positions[j * 3 + 1] = target.y * finalScale;
-      positions[j * 3 + 2] = target.z * finalScale;
+      target.x *= finalScale;
+      target.y *= finalScale;
+      target.z *= finalScale;
+      if (rotMat) target.applyMatrix4(rotMat);
+
+      positions[j * 3] = target.x;
+      positions[j * 3 + 1] = target.y;
+      positions[j * 3 + 2] = target.z;
     }
 
     // 초과 파티클은 (0,0,0)으로 채움 (activeCount로 비활성 처리됨)
