@@ -150,7 +150,7 @@ SkinnedMesh + AnimationMixer (root motion 제거: Hips X/Z = 0)
 매 프레임 shapeUpdater 콜백:
   mixer.update(delta) → skeleton.update()
   → applyBoneTransform() → matrixWorld 적용
-  → 정규화(8유닛 * scale) → shapeTarget.positions 덮어쓰기
+  → 정규화(8유닛 * scale) → rotation 매트릭스 적용 → shapeTarget.positions 덮어쓰기
 ```
 
 ### 바이너리 포맷 (.bin)
@@ -171,7 +171,7 @@ models = [
   { id: 0, name: 'Sphere', modelPath: '/models/high_shpere.glb', scale: 0.36, sectionSpan: 1, ... },
   { id: 1, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.6, sectionSpan: 1,
     spinTop: { tilt: 0, spinSpeed: 0.3, precessionSpeed: 0.4, nutationAmp: 0.2793, nutationSpeed: 1.5, pivotY: -4 }, ... },
-  { id: 2, name: 'Human', scale: 0.35, ... },  // precomputedPositions 런타임 주입
+  { id: 2, name: 'Human', scale: 1.6, rotation: [-π/2, π/2, 0], depthSize: { min: 0.1, max: 0.7 }, ... },  // 눕힌 포즈, 왼→오 걷기
 ]
 ```
 
@@ -294,3 +294,4 @@ orbital2MaxSatZ: -1.0,            // 위성 Z 제한 (음수=카메라 뒤로)
 - `extract-vertices.mjs`의 MODELS 배열과 `sceneConfig.ts`의 models 배열을 동기화 유지
 - per-particle 연산은 모두 클라이언트 브라우저 CPU에서 실행됨
 - 각 shape의 파티클 수는 `models[].particleCount`로 개별 설정 가능 (씬 01-02는 같은 shape이므로 공유)
+- **shapeUpdater shape의 rotation**: `config.rotation`은 ParticleMorpher 로딩 시 적용되지만, shapeUpdater가 매 프레임 위치를 덮어쓰는 shape(Human 등)은 updater 내에서도 rotation을 적용해야 함. `fbxWalking.ts`의 `registerWalkingUpdater`가 rotation 파라미터를 받아 매 프레임 회전 매트릭스 적용
