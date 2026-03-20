@@ -209,6 +209,8 @@ function computeMetaballLinearSplit(
   normals: Float32Array,
   elapsed: number, config: MetaballLinearConfig,
   allDirs: LinearDir[], satCenters: Float64Array,
+  mainParticleRatio?: number,
+  maxSatZ?: number,
 ) {
   const satCount = Math.min(config.satelliteCount, 8);
   const mainR2 = config.mainRadius * config.mainRadius;
@@ -219,16 +221,20 @@ function computeMetaballLinearSplit(
   const mainCz = 0;
 
   // Update satellite positions (linear reciprocation along fixed directions)
+  // 위성 Z를 메인 구 앞면 이내로 제한 (카메라 앞으로 튀어나오지 않게)
+  const satZLimit = maxSatZ ?? config.mainRadius;
   for (let s = 0; s < satCount; s++) {
     const d = allDirs[s];
     const t = Math.sin(elapsed * config.travelSpeed * d.speedMul + d.phase);
     const dist = config.travelDistance * t;
     satCenters[s * 3] = mainCx + d.dir[0] * dist;
     satCenters[s * 3 + 1] = mainCy + d.dir[1] * dist;
-    satCenters[s * 3 + 2] = mainCz + d.dir[2] * dist;
+    satCenters[s * 3 + 2] = Math.min(mainCz + d.dir[2] * dist, satZLimit);
   }
 
-  const mainParticleEnd = Math.floor(count * 0.5);
+  // 메인/위성 파티클 비율: mainParticleRatio 지정 시 사용, 미지정 시 표면적 비례 자동 계산
+  const mainFraction = mainParticleRatio ?? (mainR2 / (mainR2 + satCount * satR2));
+  const mainParticleEnd = Math.floor(count * mainFraction);
 
   // Main sphere particles: ray-march from main center
   for (let i = 0; i < mainParticleEnd; i++) {
@@ -339,6 +345,10 @@ export interface UnifiedSphereConfig {
   deformActiveCount?: number;
   orbitalActiveCount: 1000;
   orbital2ActiveCount: 10000; // 위선 liner orbital2ActiveCount?: number;
+  // orbital2 메인/위성 파티클 비율 (0~1). 미지정 시 표면적 비례 자동 계산
+  orbital2MainParticleRatio?: number;
+  // 위성 최대 Z좌표 (카메라 방향 제한). 0=메인 중심까지, 음수=더 뒤로
+  orbital2MaxSatZ?: number;
 }
 
 let activeUnifiedConfig: UnifiedSphereConfig | null = null;
@@ -389,12 +399,12 @@ export function registerUnifiedSphere(
       threshold: 0.5,
     },
     orbital2: {
-      mainRadius: 0.85, //0.7
+      mainRadius: 1.00, //0.83 0.7
       bobAmplitude: 0.75,
       bobSpeed: 1.1,
       satelliteCount: 5,
-      satelliteRadius: 0.2,
-      travelDistance: 1.9, //1.5
+      satelliteRadius: 0.2,  //
+      travelDistance: 2.0, //1.9 1.5
       travelSpeed: 0.8,
       threshold: 1.05,
     },
@@ -407,7 +417,9 @@ export function registerUnifiedSphere(
     // 서브 섹션별 조명 (4속성 모두 명시하여 프레임 간 값 잔존 방지)
     deformLighting:  { ambient: 0.1, diffuse: 3.0, specular: 10, shininess: 20.0 },
     orbitalLighting: { ambient: 0.15, diffuse: 0.4, specular: 0, shininess: 2.0 },
-    orbital2Lighting: { ambient: 10, diffuse: 0.1, specular: 0, shininess: 2.0 }, //전체 밝기, 확산광도, 핀 조명 0이면 번쩍이는 반사효과 제거, 집중도 높을 수록 날카로운 하이라이트 
+    orbital2Lighting: { ambient: 10, diffuse: 0.1, specular: 0, shininess: 2.0 }, //전체 밝기, 확산광도, 핀 조명 0이면 번쩍이는 반사효과 제거, 집중도 높을 수록 날카로운 하이라이트
+    orbital2MainParticleRatio: 0.80, // 메인/위성 파티클 비율 (0~1). 미지정 시 표면적 비례 자동 계산
+    orbital2MaxSatZ: -1.0, // 위성 최대 Z (0=메인 중심까지, 음수=더 뒤로, 미지정=mainRadius)
   };
 
   const positions = shape.positions;
@@ -580,7 +592,7 @@ export function registerUnifiedSphere(
         computeMetaballOrbital(outA, count, normals, avgRadius, elapsed, config.metaball, allSatellites, satCenters);
         break;
       case 'orbital2':
-        computeMetaballLinearSplit(outA, count, normals, elapsed, config.orbital2, allLinearDirs, satCenters2);
+        computeMetaballLinearSplit(outA, count, normals, elapsed, config.orbital2, allLinearDirs, satCenters2, config.orbital2MainParticleRatio, config.orbital2MaxSatZ);
         break;
     }
 
@@ -591,7 +603,7 @@ export function registerUnifiedSphere(
           computeMetaballOrbital(bufB, count, normals, avgRadius, elapsed, config.metaball, allSatellites, satCenters);
           break;
         case 'orbital2':
-          computeMetaballLinearSplit(bufB, count, normals, elapsed, config.orbital2, allLinearDirs, satCenters2);
+          computeMetaballLinearSplit(bufB, count, normals, elapsed, config.orbital2, allLinearDirs, satCenters2, config.orbital2MainParticleRatio, config.orbital2MaxSatZ);
           break;
       }
 

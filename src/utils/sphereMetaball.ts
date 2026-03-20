@@ -372,8 +372,11 @@ export function registerSphereMetaballLinear(
       satCenters[s * 3 + 2] = mainCz + d.dir[2] * dist;
     }
 
-    // Particle allocation: main sphere gets 50%, rest interleaved among satellites
-    const mainParticleEnd = Math.floor(count * 0.5);
+    // Allocate particles proportional to surface area so density is uniform
+    const mainArea = mainR * mainR;
+    const satArea = satCount * satR * satR;
+    const mainFraction = mainArea / (mainArea + satArea);
+    const mainParticleEnd = Math.floor(count * mainFraction);
 
     // --- Main sphere particles: rays from main center ---
     for (let i = 0; i < mainParticleEnd; i++) {
