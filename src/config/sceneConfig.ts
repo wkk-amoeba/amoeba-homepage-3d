@@ -184,9 +184,9 @@ export const backgroundConfig = {
   radius: 8,             // 원통 반경
   height: 8,             // 원통 높이 (Y축)
   minRadius: 1,          // 카메라 근처 빈 영역
-  size: 0.04,
+  size: 0.05,
   opacity: 1,
   rotationSpeed: 0.02,
   exclusionRadius: 0,   // 오브젝트 실루엣 제외 반경 (NDC 단위)
-  exclusionFade: 0.7,     // 제외 경계 페이드 영역 크기
+  exclusionFade: 0.2,     // 제외 경계 페이드 영역 크기
 };
