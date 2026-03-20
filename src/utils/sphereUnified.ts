@@ -375,8 +375,8 @@ export interface UnifiedSphereConfig {
   orbital2Lighting?: { ambient?: number; diffuse?: number; specular?: number; shininess?: number };
   // 서브섹션별 파티클 수 (미지정 시 초기 activeCount 유지)
   deformActiveCount?: number;
-  orbitalActiveCount: 1000;
-  orbital2ActiveCount: 10000; // 위선 liner orbital2ActiveCount?: number;
+  orbitalActiveCount?: number;
+  orbital2ActiveCount?: number;
   // orbital2 메인/위성 파티클 비율 (0~1). 미지정 시 표면적 비례 자동 계산
   orbital2MainParticleRatio?: number;
   // 위성 최대 Z좌표 (카메라 방향 제한). 0=메인 중심까지, 음수=더 뒤로
