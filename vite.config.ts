@@ -3,7 +3,7 @@ import { resolve } from 'path';
 
 export default defineConfig(({ mode }) => ({
   define: {
-    __DEBUG_PANEL__: mode === 'development',
+    __DEBUG_PANEL__: true,
   },
   build: {
     target: 'esnext',

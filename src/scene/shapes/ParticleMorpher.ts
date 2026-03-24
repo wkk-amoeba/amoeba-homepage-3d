@@ -15,6 +15,7 @@ interface ShapeTarget {
   radialSize?: { min: number; max: number; maxRadius: number }; // 중심축 거리 기반 크기
   depthSize?: { min: number; max: number; zMin: number; zMax: number }; // Z 깊이 기반 크기
   spinTop?: { tilt: number; spinSpeed: number; precessionSpeed: number; nutationAmp: number; nutationSpeed: number; pivotY: number };
+  shapeScale: number;        // 런타임 per-shape 스케일 (디버그 패널용, 기본 1.0)
   autoRotateSpeed?: number; // 모델별 자전 속도 오버라이드
   lighting?: { ambient?: number; diffuse?: number; specular?: number; shininess?: number };
   enterTransition?: { noRotation?: boolean; gravity?: boolean; gravityHeight?: number; gravityDuration?: number; gravityWobbleFreq?: number; scatterScale?: number };
@@ -486,6 +487,7 @@ export class ParticleMorpher {
         radialSize: radialSizeData,
         depthSize: depthSizeData,
         spinTop: spinTopData,
+        shapeScale: 1.0,
         autoRotateSpeed: config.autoRotateSpeed,
         lighting: config.lighting,
         enterTransition: config.enterTransition,
@@ -936,9 +938,10 @@ void main() {`
       const i3 = i * 3;
       // Lerp: scattered position → target shape position (including holdScatter)
       const hs = first.holdScatter;
-      const targetX = first.positions[i3] + first.worldOffset.x + (hs > 0 ? this.scatterOffsets[i3] * hs : 0);
-      const targetY = first.positions[i3 + 1] + first.worldOffset.y + (hs > 0 ? this.scatterOffsets[i3 + 1] * hs : 0);
-      const targetZ = first.positions[i3 + 2] + first.worldOffset.z + (hs > 0 ? this.scatterOffsets[i3 + 2] * hs : 0);
+      const fss = first.shapeScale;
+      const targetX = first.positions[i3] * fss + first.worldOffset.x + (hs > 0 ? this.scatterOffsets[i3] * hs : 0);
+      const targetY = first.positions[i3 + 1] * fss + first.worldOffset.y + (hs > 0 ? this.scatterOffsets[i3 + 1] * hs : 0);
+      const targetZ = first.positions[i3 + 2] * fss + first.worldOffset.z + (hs > 0 ? this.scatterOffsets[i3 + 2] * hs : 0);
       let bx = this.scatterOffsets[i3] * scatter + targetX * eased;
       let by = this.scatterOffsets[i3 + 1] * scatter + targetY * eased;
       let bz = this.scatterOffsets[i3 + 2] * scatter + targetZ * eased;
@@ -1197,9 +1200,10 @@ void main() {`
         return { x: shape.worldOffset.x, y: shape.worldOffset.y, z: shape.worldOffset.z, isInactive: true };
       }
 
-      let baseX = shape.positions[i3] + shape.worldOffset.x;
-      let baseY = shape.positions[i3 + 1] + shape.worldOffset.y;
-      let baseZ = shape.positions[i3 + 2] + shape.worldOffset.z;
+      const ss = shape.shapeScale;
+      let baseX = shape.positions[i3] * ss + shape.worldOffset.x;
+      let baseY = shape.positions[i3 + 1] * ss + shape.worldOffset.y;
+      let baseZ = shape.positions[i3 + 2] * ss + shape.worldOffset.z;
       // Apply holdScatter: add scatter offset to keep particles partially dispersed
       if (shape.holdScatter > 0) {
         baseX += this.scatterOffsets[i3] * shape.holdScatter;
@@ -1252,29 +1256,31 @@ void main() {`
     const scatterScaleVal = enterTr?.scatterScale ?? particleConfig.scatterScale;
 
     // from 위치 결정
+    const fss = from.shapeScale;
+    const tss = to.shapeScale;
     let fX: number, fY: number, fZ: number;
     if (i < fromActive) {
-      fX = from.positions[i3] + from.worldOffset.x + (fhs > 0 ? this.scatterOffsets[i3] * fhs : 0);
-      fY = from.positions[i3 + 1] + from.worldOffset.y + (fhs > 0 ? this.scatterOffsets[i3 + 1] * fhs : 0);
-      fZ = from.positions[i3 + 2] + from.worldOffset.z + (fhs > 0 ? this.scatterOffsets[i3 + 2] * fhs : 0);
+      fX = from.positions[i3] * fss + from.worldOffset.x + (fhs > 0 ? this.scatterOffsets[i3] * fhs : 0);
+      fY = from.positions[i3 + 1] * fss + from.worldOffset.y + (fhs > 0 ? this.scatterOffsets[i3 + 1] * fhs : 0);
+      fZ = from.positions[i3 + 2] * fss + from.worldOffset.z + (fhs > 0 ? this.scatterOffsets[i3 + 2] * fhs : 0);
     } else {
       // from에 없음 → to 위치에서 scatter 상태로 시작
-      fX = to.positions[i3] + to.worldOffset.x + this.scatterOffsets[i3] * scatterScaleVal * 5;
-      fY = to.positions[i3 + 1] + to.worldOffset.y + this.scatterOffsets[i3 + 1] * scatterScaleVal * 5;
-      fZ = to.positions[i3 + 2] + to.worldOffset.z + this.scatterOffsets[i3 + 2] * scatterScaleVal * 5;
+      fX = to.positions[i3] * tss + to.worldOffset.x + this.scatterOffsets[i3] * scatterScaleVal * 5;
+      fY = to.positions[i3 + 1] * tss + to.worldOffset.y + this.scatterOffsets[i3 + 1] * scatterScaleVal * 5;
+      fZ = to.positions[i3 + 2] * tss + to.worldOffset.z + this.scatterOffsets[i3 + 2] * scatterScaleVal * 5;
     }
 
     // to 위치 결정
     let tX: number, tY: number, tZ: number;
     if (i < toActive) {
-      tX = to.positions[i3] + to.worldOffset.x + (ths > 0 ? this.scatterOffsets[i3] * ths : 0);
-      tY = to.positions[i3 + 1] + to.worldOffset.y + (ths > 0 ? this.scatterOffsets[i3 + 1] * ths : 0);
-      tZ = to.positions[i3 + 2] + to.worldOffset.z + (ths > 0 ? this.scatterOffsets[i3 + 2] * ths : 0);
+      tX = to.positions[i3] * tss + to.worldOffset.x + (ths > 0 ? this.scatterOffsets[i3] * ths : 0);
+      tY = to.positions[i3 + 1] * tss + to.worldOffset.y + (ths > 0 ? this.scatterOffsets[i3 + 1] * ths : 0);
+      tZ = to.positions[i3 + 2] * tss + to.worldOffset.z + (ths > 0 ? this.scatterOffsets[i3 + 2] * ths : 0);
     } else {
       // to에 없음 → from 위치에서 scatter로 퇴장
-      tX = from.positions[i3] + from.worldOffset.x + this.scatterOffsets[i3] * scatterScaleVal * 5;
-      tY = from.positions[i3 + 1] + from.worldOffset.y + this.scatterOffsets[i3 + 1] * scatterScaleVal * 5;
-      tZ = from.positions[i3 + 2] + from.worldOffset.z + this.scatterOffsets[i3 + 2] * scatterScaleVal * 5;
+      tX = from.positions[i3] * fss + from.worldOffset.x + this.scatterOffsets[i3] * scatterScaleVal * 5;
+      tY = from.positions[i3 + 1] * fss + from.worldOffset.y + this.scatterOffsets[i3 + 1] * scatterScaleVal * 5;
+      tZ = from.positions[i3 + 2] * fss + from.worldOffset.z + this.scatterOffsets[i3 + 2] * scatterScaleVal * 5;
     }
 
     // Lerp between shapes

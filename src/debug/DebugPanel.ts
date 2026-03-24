@@ -3,6 +3,39 @@ import { SceneManager } from '../scene/SceneManager';
 import { particleConfig, backgroundConfig, animationPhases } from '../config/sceneConfig';
 import { getActiveUnifiedConfig } from '../utils/sphereUnified';
 
+const STORAGE_KEY = 'particle-debug-settings';
+
+interface LightingValues { ambient: number; diffuse: number; specular: number; shininess: number }
+
+interface SavedSettings {
+  globalLighting: { dirX: number; dirY: number; dirZ: number; ambient: number; diffuse: number; specular: number; shininess: number };
+  scene1: { depthMin: number; depthMax: number; particleSize: number; deformLighting: LightingValues };
+  scene2?: { orbital2Lighting: LightingValues };
+  scene3: { shapeScale: number };
+}
+
+function loadSettings(): SavedSettings | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+
+function saveSettings(s: SavedSettings) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
+}
+
+function exportSettings(s: SavedSettings) {
+  const blob = new Blob([JSON.stringify(s, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `particle-settings-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+
 export class DebugPanel {
   private gui: GUI;
   private animFrameId: number | null = null;
@@ -10,10 +43,8 @@ export class DebugPanel {
   constructor(sceneManager: SceneManager) {
     this.gui = new GUI({ title: 'Particle Debug' });
 
-    // Collapse by default in production (build:debug)
-    if (!import.meta.env.DEV) {
-      this.gui.close();
-    }
+    // Collapse by default in production
+    // (현재 펼침 상태 기본)
 
     // Wait for models to load before building UI
     setTimeout(() => this.buildUI(sceneManager), 1500);
@@ -24,153 +55,69 @@ export class DebugPanel {
     if (!morpher) return;
 
     const isDev = import.meta.env.DEV;
-
-    // Global Settings folder
-    const globalFolder = this.gui.addFolder('Global Settings');
-    const globalParams = {
-      particleSize: particleConfig.size,
-      scale: morpher.userScale,
-      mouseRadius: particleConfig.mouseRadius,
-      mouseStrength: particleConfig.mouseStrength,
-    };
-
-    globalFolder
-      .add(globalParams, 'particleSize', 0.01, 0.15, 0.005)
-      .name('Particle Size')
-      .onChange((v: number) => { morpher.particleSize = v; });
-
-    globalFolder
-      .add(globalParams, 'scale', 0.1, 3.0, 0.05)
-      .name('Scale')
-      .onChange((v: number) => { morpher.userScale = v; });
-
-    globalFolder
-      .add(particleConfig, 'depthNearMul', 0.1, 3.0, 0.1)
-      .name('Near Size (×)');
-
-    if (isDev) {
-      globalFolder
-        .add(particleConfig, 'depthFarMul', 0.1, 5.0, 0.1)
-        .name('Far Size (×)');
-    }
-
-    globalFolder
-      .add(globalParams, 'mouseRadius', 0.05, 2.0, 0.01)
-      .name('Dome Radius')
-      .onChange((v: number) => { particleConfig.mouseRadius = v; });
-
-    if (isDev) {
-      globalFolder
-        .add(particleConfig, 'activationRadius', 1.0, 10.0, 0.5)
-        .name('Activation Radius');
-    }
-
-    if (isDev) {
-      globalFolder
-        .add(particleConfig, 'showDomeDebug')
-        .name('Show Dome Area');
-    }
-
-    globalFolder
-      .add(particleConfig, 'microNoiseAmp', 0, 0.1, 0.001)
-      .name('Micro Orbit Radius');
-
-    globalFolder
-      .add(particleConfig, 'microNoiseSpeed', 0, 3.0, 0.05)
-      .name('Micro Orbit Speed');
-
-    globalFolder
-      .add(particleConfig, 'mouseAttract')
-      .name('Attract (vs Scatter)');
-
-    globalFolder
-      .add(globalParams, 'mouseStrength', 0.1, 3.0, 0.05)
-      .name('Mouse Strength')
-      .onChange((v: number) => { particleConfig.mouseStrength = v; });
-
-    globalFolder
-      .add(particleConfig, 'scatterScale', 0.01, 1.0, 0.01)
-      .name('Scatter Range');
-
-    if (isDev) {
-      globalFolder
-        .add(particleConfig, 'parallaxStrength', 0, 0.5, 0.01)
-        .name('Parallax');
-    }
-
-    // Animation phases
-    if (isDev) {
-      const phaseFolder = globalFolder.addFolder('Animation Phases');
-      const exitCtrl = phaseFolder
-        .add(animationPhases, 'exitRatio', 0.05, 0.5, 0.05)
-        .name('Exit')
-        .disable();
-
-      phaseFolder
-        .add(animationPhases, 'enterRatio', 0.05, 0.5, 0.05)
-        .name('Enter')
-        .onChange(() => {
-          animationPhases.exitRatio = Math.max(0.05, 1 - animationPhases.enterRatio - animationPhases.holdRatio);
-          exitCtrl.updateDisplay();
-        });
-      phaseFolder
-        .add(animationPhases, 'holdRatio', 0.1, 0.8, 0.05)
-        .name('Hold')
-        .onChange(() => {
-          animationPhases.exitRatio = Math.max(0.05, 1 - animationPhases.enterRatio - animationPhases.holdRatio);
-          exitCtrl.updateDisplay();
-        });
-    }
-
-    // Transition rotation
-    if (isDev) {
-      const transFolder = globalFolder.addFolder('Transition Rotation');
-      transFolder
-        .add(particleConfig, 'transitionRotation')
-        .name('Enable');
-      transFolder
-        .add(particleConfig, 'transitionRotationSpeed', 0.5, 10.0, 0.5)
-        .name('Speed');
-    }
-
-    // Size effect: dev only
-    if (isDev) {
-      const sizeFolder = globalFolder.addFolder('Size Effect');
-      sizeFolder
-        .add(particleConfig, 'mouseSizeEffect')
-        .name('Enable');
-      sizeFolder
-        .add(particleConfig, 'mouseSizeStrength', 0, 2.0, 0.05)
-        .name('Strength');
-    }
-
-    // Orbit & Spring: dev only
-    if (isDev) {
-      const orbitFolder = globalFolder.addFolder('Orbit');
-      orbitFolder
-        .add(particleConfig, 'orbitSpeed', 0, 6.0, 0.1)
-        .name('Speed');
-      orbitFolder
-        .add(particleConfig, 'orbitStrength', 0, 1.0, 0.01)
-        .name('Strength');
-
-      const springFolder = globalFolder.addFolder('Spring Physics');
-      springFolder
-        .add(particleConfig, 'springEnabled')
-        .name('Enable Spring');
-      springFolder
-        .add(particleConfig, 'springStiffness', 20, 500, 5)
-        .name('Stiffness');
-      springFolder
-        .add(particleConfig, 'springDamping', 1, 30, 0.5)
-        .name('Damping');
-    }
-
-    // Background reference (needed for lighting sync)
     const bg = sceneManager.getBackground();
+    const shapeTargets = morpher.getShapeTargets();
 
-    // Lighting folder
-    const lightFolder = globalFolder.addFolder('Lighting');
+    // ── Production controls (always visible) ──
+
+    const sphereShape = shapeTargets.find(s => s.name === 'Sphere');
+    const unifiedCfgProd = getActiveUnifiedConfig();
+    const gyroIdx = shapeTargets.findIndex(s => s.name === 'Gyro');
+    const gyroShape = gyroIdx >= 0 ? shapeTargets[gyroIdx] : null;
+    const dl = unifiedCfgProd?.deformLighting;
+    const o2l = unifiedCfgProd?.orbital2Lighting;
+
+    // Restore saved settings
+    const saved = loadSettings();
+    if (saved) {
+      // Global Lighting
+      const gl = saved.globalLighting;
+      particleConfig.lightDirection[0] = gl.dirX;
+      particleConfig.lightDirection[1] = gl.dirY;
+      particleConfig.lightDirection[2] = gl.dirZ;
+      particleConfig.lightAmbient = gl.ambient;
+      particleConfig.lightDiffuse = gl.diffuse;
+      particleConfig.lightSpecular = gl.specular;
+      particleConfig.lightShininess = gl.shininess;
+      morpher.setLightDirection(gl.dirX, gl.dirY, gl.dirZ);
+      morpher.setLightAmbient(gl.ambient);
+      morpher.setLightDiffuse(gl.diffuse);
+      morpher.setLightSpecular(gl.specular);
+      morpher.setLightShininess(gl.shininess);
+      bg.setLightDirection(gl.dirX, gl.dirY, gl.dirZ);
+      bg.setLightAmbient(gl.ambient);
+      bg.setLightDiffuse(gl.diffuse);
+
+      // Scene 1
+      const s1 = saved.scene1;
+      if (sphereShape?.depthSize) {
+        sphereShape.depthSize.min = s1.depthMin;
+        sphereShape.depthSize.max = s1.depthMax;
+      }
+      morpher.particleSize = s1.particleSize;
+      if (dl) {
+        dl.ambient = s1.deformLighting.ambient;
+        dl.diffuse = s1.deformLighting.diffuse;
+        dl.specular = s1.deformLighting.specular;
+        dl.shininess = s1.deformLighting.shininess;
+      }
+
+      // Scene 2
+      if (saved.scene2 && o2l) {
+        o2l.ambient = saved.scene2.orbital2Lighting.ambient;
+        o2l.diffuse = saved.scene2.orbital2Lighting.diffuse;
+        o2l.specular = saved.scene2.orbital2Lighting.specular;
+        o2l.shininess = saved.scene2.orbital2Lighting.shininess;
+      }
+
+      // Scene 3
+      if (gyroShape) {
+        gyroShape.shapeScale = saved.scene3.shapeScale;
+      }
+    }
+
+    // Global Lighting
+    const lightFolder = this.gui.addFolder('Global Lighting');
     const lightParams = {
       dirX: particleConfig.lightDirection[0],
       dirY: particleConfig.lightDirection[1],
@@ -203,6 +150,207 @@ export class DebugPanel {
     lightFolder.add(lightParams, 'shininess', 1, 128, 1).name('Shininess').onChange((v: number) => {
       morpher.setLightShininess(v);
     });
+    lightFolder.open();
+
+    // Scene 01: Sphere particle size + deform lighting
+    const sizeParams = { size: morpher.particleSize };
+    if (sphereShape) {
+      const s1Folder = this.gui.addFolder('씬 1');
+
+      if (sphereShape.depthSize) {
+        const ds = sphereShape.depthSize;
+        s1Folder.add(ds, 'min', 0, 1.0, 0.05).name('Particle Size Min');
+        s1Folder.add(ds, 'max', 0, 2.0, 0.05).name('Particle Size Max');
+      }
+
+      s1Folder
+        .add(sizeParams, 'size', 0.01, 0.15, 0.005)
+        .name('Particle Size')
+        .onChange((v: number) => { morpher.particleSize = v; });
+
+      if (dl) {
+        s1Folder.add(dl, 'ambient', 0, 1, 0.05).name('Ambient');
+        s1Folder.add(dl, 'diffuse', 0, 6, 0.1).name('Diffuse');
+        s1Folder.add(dl, 'specular', 0, 10, 0.1).name('Specular');
+        s1Folder.add(dl, 'shininess', 0, 20, 0.5).name('Shininess');
+      }
+
+      s1Folder.open();
+    }
+
+    // Scene 02: orbital2 lighting
+    if (o2l) {
+      const s2Folder = this.gui.addFolder('씬 2');
+      s2Folder.add(o2l, 'ambient', 0, 1, 0.05).name('Ambient');
+      s2Folder.add(o2l, 'diffuse', 0, 6, 0.1).name('Diffuse');
+      s2Folder.add(o2l, 'specular', 0, 10, 0.1).name('Specular');
+      s2Folder.add(o2l, 'shininess', 0, 20, 0.5).name('Shininess');
+      s2Folder.open();
+    }
+
+    // Scene 03 (Gyro): per-shape scale
+    if (gyroShape) {
+      const gyroFolder = this.gui.addFolder('씬 3');
+      gyroFolder.add(gyroShape, 'shapeScale', 0.3, 2.0, 0.05).name('Scale');
+      gyroFolder.open();
+    }
+
+    // Save / Reset buttons
+    const collectSettings = (): SavedSettings => ({
+      globalLighting: { ...lightParams },
+      scene1: {
+        depthMin: sphereShape?.depthSize?.min ?? 0.1,
+        depthMax: sphereShape?.depthSize?.max ?? 0.7,
+        particleSize: morpher.particleSize,
+        deformLighting: {
+          ambient: dl?.ambient ?? 0.1,
+          diffuse: dl?.diffuse ?? 2.0,
+          specular: dl?.specular ?? 2.0,
+          shininess: dl?.shininess ?? 1.0,
+        },
+      },
+      scene2: {
+        orbital2Lighting: {
+          ambient: o2l?.ambient ?? 0.2,
+          diffuse: o2l?.diffuse ?? 6.0,
+          specular: o2l?.specular ?? 1.0,
+          shininess: o2l?.shininess ?? 1.0,
+        },
+      },
+      scene3: { shapeScale: gyroShape?.shapeScale ?? 1.0 },
+    });
+
+    this.gui.add({ save: () => { saveSettings(collectSettings()); } }, 'save').name('Save');
+    this.gui.add({ export: () => { exportSettings(collectSettings()); } }, 'export').name('Export');
+
+    // ── Dev-only controls ──
+
+    if (!isDev) return;
+
+    // Global Settings folder
+    const globalFolder = this.gui.addFolder('Global Settings');
+    const globalParams = {
+      particleSize: particleConfig.size,
+      scale: morpher.userScale,
+      mouseRadius: particleConfig.mouseRadius,
+      mouseStrength: particleConfig.mouseStrength,
+    };
+
+    globalFolder
+      .add(globalParams, 'particleSize', 0.01, 0.15, 0.005)
+      .name('Particle Size')
+      .onChange((v: number) => { morpher.particleSize = v; });
+
+    globalFolder
+      .add(globalParams, 'scale', 0.1, 3.0, 0.05)
+      .name('Scale')
+      .onChange((v: number) => { morpher.userScale = v; });
+
+    globalFolder
+      .add(particleConfig, 'depthNearMul', 0.1, 3.0, 0.1)
+      .name('Near Size (×)');
+
+    globalFolder
+      .add(particleConfig, 'depthFarMul', 0.1, 5.0, 0.1)
+      .name('Far Size (×)');
+
+    globalFolder
+      .add(globalParams, 'mouseRadius', 0.05, 2.0, 0.01)
+      .name('Dome Radius')
+      .onChange((v: number) => { particleConfig.mouseRadius = v; });
+
+    globalFolder
+      .add(particleConfig, 'activationRadius', 1.0, 10.0, 0.5)
+      .name('Activation Radius');
+
+    globalFolder
+      .add(particleConfig, 'showDomeDebug')
+      .name('Show Dome Area');
+
+    globalFolder
+      .add(particleConfig, 'microNoiseAmp', 0, 0.1, 0.001)
+      .name('Micro Orbit Radius');
+
+    globalFolder
+      .add(particleConfig, 'microNoiseSpeed', 0, 3.0, 0.05)
+      .name('Micro Orbit Speed');
+
+    globalFolder
+      .add(particleConfig, 'mouseAttract')
+      .name('Attract (vs Scatter)');
+
+    globalFolder
+      .add(globalParams, 'mouseStrength', 0.1, 3.0, 0.05)
+      .name('Mouse Strength')
+      .onChange((v: number) => { particleConfig.mouseStrength = v; });
+
+    globalFolder
+      .add(particleConfig, 'scatterScale', 0.01, 1.0, 0.01)
+      .name('Scatter Range');
+
+    globalFolder
+      .add(particleConfig, 'parallaxStrength', 0, 0.5, 0.01)
+      .name('Parallax');
+
+    // Animation phases
+    const phaseFolder = globalFolder.addFolder('Animation Phases');
+    const exitCtrl = phaseFolder
+      .add(animationPhases, 'exitRatio', 0.05, 0.5, 0.05)
+      .name('Exit')
+      .disable();
+
+    phaseFolder
+      .add(animationPhases, 'enterRatio', 0.05, 0.5, 0.05)
+      .name('Enter')
+      .onChange(() => {
+        animationPhases.exitRatio = Math.max(0.05, 1 - animationPhases.enterRatio - animationPhases.holdRatio);
+        exitCtrl.updateDisplay();
+      });
+    phaseFolder
+      .add(animationPhases, 'holdRatio', 0.1, 0.8, 0.05)
+      .name('Hold')
+      .onChange(() => {
+        animationPhases.exitRatio = Math.max(0.05, 1 - animationPhases.enterRatio - animationPhases.holdRatio);
+        exitCtrl.updateDisplay();
+      });
+
+    // Transition rotation
+    const transFolder = globalFolder.addFolder('Transition Rotation');
+    transFolder
+      .add(particleConfig, 'transitionRotation')
+      .name('Enable');
+    transFolder
+      .add(particleConfig, 'transitionRotationSpeed', 0.5, 10.0, 0.5)
+      .name('Speed');
+
+    // Size effect
+    const sizeFolder = globalFolder.addFolder('Size Effect');
+    sizeFolder
+      .add(particleConfig, 'mouseSizeEffect')
+      .name('Enable');
+    sizeFolder
+      .add(particleConfig, 'mouseSizeStrength', 0, 2.0, 0.05)
+      .name('Strength');
+
+    // Orbit & Spring
+    const orbitFolder = globalFolder.addFolder('Orbit');
+    orbitFolder
+      .add(particleConfig, 'orbitSpeed', 0, 6.0, 0.1)
+      .name('Speed');
+    orbitFolder
+      .add(particleConfig, 'orbitStrength', 0, 1.0, 0.01)
+      .name('Strength');
+
+    const springFolder = globalFolder.addFolder('Spring Physics');
+    springFolder
+      .add(particleConfig, 'springEnabled')
+      .name('Enable Spring');
+    springFolder
+      .add(particleConfig, 'springStiffness', 20, 500, 5)
+      .name('Stiffness');
+    springFolder
+      .add(particleConfig, 'springDamping', 1, 30, 0.5)
+      .name('Damping');
 
     globalFolder.open();
 
@@ -223,50 +371,47 @@ export class DebugPanel {
       .name('Enable')
       .onChange((v: boolean) => { backgroundConfig.enabled = v; bg.visible = v; });
 
-    if (isDev) {
-      bgFolder
-        .add(bgParams, 'count', 0, 1000, 10)
-        .name('Count')
-        .onChange((v: number) => { backgroundConfig.count = v; bg.rebuild(); });
+    bgFolder
+      .add(bgParams, 'count', 0, 1000, 10)
+      .name('Count')
+      .onChange((v: number) => { backgroundConfig.count = v; bg.rebuild(); });
 
-      bgFolder
-        .add(bgParams, 'radius', 5, 50, 1)
-        .name('Radius')
-        .onChange((v: number) => { backgroundConfig.radius = v; bg.rebuild(); });
+    bgFolder
+      .add(bgParams, 'radius', 5, 50, 1)
+      .name('Radius')
+      .onChange((v: number) => { backgroundConfig.radius = v; bg.rebuild(); });
 
-      bgFolder
-        .add(bgParams, 'height', 5, 60, 1)
-        .name('Height')
-        .onChange((v: number) => { backgroundConfig.height = v; bg.rebuild(); });
+    bgFolder
+      .add(bgParams, 'height', 5, 60, 1)
+      .name('Height')
+      .onChange((v: number) => { backgroundConfig.height = v; bg.rebuild(); });
 
-      bgFolder
-        .add(bgParams, 'minRadius', 0, 20, 1)
-        .name('Min Radius')
-        .onChange((v: number) => { backgroundConfig.minRadius = v; bg.rebuild(); });
+    bgFolder
+      .add(bgParams, 'minRadius', 0, 20, 1)
+      .name('Min Radius')
+      .onChange((v: number) => { backgroundConfig.minRadius = v; bg.rebuild(); });
 
-      bgFolder
-        .add(bgParams, 'size', 0.005, 0.1, 0.005)
-        .name('Size')
-        .onChange((v: number) => { backgroundConfig.size = v; bg.rebuild(); });
+    bgFolder
+      .add(bgParams, 'size', 0.005, 0.1, 0.005)
+      .name('Size')
+      .onChange((v: number) => { backgroundConfig.size = v; bg.rebuild(); });
 
-      bgFolder
-        .add(bgParams, 'opacity', 0, 1, 0.05)
-        .name('Opacity')
-        .onChange((v: number) => { backgroundConfig.opacity = v; bg.rebuild(); });
+    bgFolder
+      .add(bgParams, 'opacity', 0, 1, 0.05)
+      .name('Opacity')
+      .onChange((v: number) => { backgroundConfig.opacity = v; bg.rebuild(); });
 
-      bgFolder
-        .add(backgroundConfig, 'exclusionRadius', 0, 3, 0.05)
-        .name('Exclusion R')
-        .onChange((v: number) => { bg.setExclusionRadius(v); });
+    bgFolder
+      .add(backgroundConfig, 'exclusionRadius', 0, 3, 0.05)
+      .name('Exclusion R')
+      .onChange((v: number) => { bg.setExclusionRadius(v); });
 
-      bgFolder
-        .add(backgroundConfig, 'exclusionFade', 0, 1, 0.05)
-        .name('Exclusion Fade')
-        .onChange((v: number) => { bg.setExclusionFade(v); });
-    }
+    bgFolder
+      .add(backgroundConfig, 'exclusionFade', 0, 1, 0.05)
+      .name('Exclusion Fade')
+      .onChange((v: number) => { bg.setExclusionFade(v); });
 
     // Per-shape position folders
-    const shapeTargets = morpher.getShapeTargets();
     shapeTargets.forEach((shape, index) => {
       const folder = this.gui.addFolder(`${index}: ${shape.name}`);
 
@@ -291,6 +436,10 @@ export class DebugPanel {
         .add(params, 'posZ', -10, 10, 0.1)
         .name('Position Z')
         .onChange((v: number) => { morpher.setShapePosition(index, params.posX, params.posY, v); });
+
+      folder
+        .add(shape, 'shapeScale', 0.3, 2.0, 0.05)
+        .name('Shape Scale');
 
       // Unified Sphere controls (deform + metaball orbital + metaball linear)
       const unifiedCfg = shape.name === 'Sphere' ? getActiveUnifiedConfig() : null;
@@ -372,7 +521,7 @@ export class DebugPanel {
       .name('Total Particles')
       .disable();
 
-    // Live Lighting Monitor — 현재 적용 중인 라이팅 uniform 값 실시간 표시
+    // Live Lighting Monitor
     const liveFolder = this.gui.addFolder('Live Lighting');
     const liveParams = {
       ambient: 0,
@@ -386,7 +535,6 @@ export class DebugPanel {
     const shnCtrl = liveFolder.add(liveParams, 'shininess', 0, 128, 0.1).name('Shininess').disable();
     liveFolder.open();
 
-    // 매 프레임 uniform 값 읽어서 표시
     const updateLiveMonitor = () => {
       const cur = morpher.getCurrentLighting();
       if (liveParams.ambient !== cur.ambient || liveParams.diffuse !== cur.diffuse ||
