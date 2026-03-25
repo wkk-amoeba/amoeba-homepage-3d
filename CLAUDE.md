@@ -285,6 +285,39 @@ orbital2MaxSatZ: -1.0,            // 위성 Z 제한 (음수=카메라 뒤로)
 - **parallax**: 마우스 위치에 따른 배경 회전 (오브젝트 파티클과 동기)
 - **exclusionRadius**: 오브젝트 실루엣 주변 파티클 제외 영역 (NDC 단위)
 
+## 디버그 패널 (DebugPanel.ts)
+
+`lil-gui` 기반 디버그 패널. `__DEBUG_PANEL__: true`로 프로덕션에서도 항상 로드됨.
+
+### 프로덕션 패널 (항상 표시)
+
+`import.meta.env.DEV`가 `false`일 때 표시되는 최소 컨트롤:
+
+| 폴더 | 컨트롤 | 대상 |
+|------|--------|------|
+| **Global Lighting** | Direction XYZ, Ambient, Diffuse, Specular, Shininess | `particleConfig.light*` (글로벌) |
+| **씬 1** | Particle Size Min/Max, Particle Size, deformLighting (A/D/S/Sh) | `sphereShape.depthSize`, `morpher.particleSize`, `sphereUnified.ts config.deformLighting` |
+| **씬 2** | Ambient, Diffuse, Specular, Shininess | `sphereUnified.ts config.orbital2Lighting` |
+| **씬 3** | Scale | `shapeTarget.shapeScale` (per-shape 런타임 스케일) |
+
+### per-shape shapeScale
+
+`ShapeTarget.shapeScale` — 런타임에 파티클 위치에 곱해지는 per-shape 스케일 (기본 1.0).
+hold, transition, intro 모든 단계에서 적용됨.
+
+### 설정 저장/내보내기
+
+- **Save** — `localStorage`에 `particle-debug-settings` 키로 JSON 저장. 다음 로드 시 자동 복원
+- **Export** — 현재 설정을 `.json` 파일로 다운로드
+- **Reset** — DevTools > Application > Local Storage에서 키 삭제 후 새로고침
+
+저장 대상: globalLighting, scene1 (depthSize + particleSize + deformLighting), scene2 (orbital2Lighting), scene3 (shapeScale)
+
+### Dev 패널 (개발 모드 전용)
+
+`import.meta.env.DEV === true`일 때 프로덕션 컨트롤에 추가로 표시:
+Global Settings, Background, per-shape Position/Scatter/Deform/Metaball 등 전체 컨트롤.
+
 ## 주의사항
 - **씬 번호 ≠ models[] 인덱스**. 씬 01-02는 models[0] 하나를 공유
 - 씬 01-02는 프로그래밍 생성 (sphereUnified.ts), 씬 03 이후는 3D 파일 사용

@@ -1114,39 +1114,37 @@ void main() {`
         const tilt = st.tilt + (st.nutationAmp > 0 ? Math.sin(this.precessionAngles[phase.shapeIdx] * st.nutationSpeed / st.precessionSpeed) * st.nutationAmp : 0);
         const spinA = this.spinAngles[phase.shapeIdx];
         const precA = this.precessionAngles[phase.shapeIdx];
-        // Ry(precession)
         const cp = Math.cos(precA), sp = Math.sin(precA);
-        // Rz(tilt)
         const ct = Math.cos(tilt), st2 = Math.sin(tilt);
-        // Ry(spin)
         const cs = Math.cos(spinA), ss = Math.sin(spinA);
-        // Combined: Ry(p) * Rz(t) * Ry(s)
-        // Row 0
         m.m00 = cp * ct * cs - sp * ss;
         m.m01 = -cp * st2;
         m.m02 = cp * ct * ss + sp * cs;
-        // Row 1
         m.m10 = st2 * cs;
         m.m11 = ct;
         m.m12 = st2 * ss;
-        // Row 2
         m.m20 = -sp * ct * cs - cp * ss;
         m.m21 = sp * st2;
         m.m22 = -sp * ct * ss + cp * cs;
       }
     } else if (phase.type === 'transition') {
-      // Blend spinTop rotation during transition (identity → full rotation)
+      const fromSt = this.shapeTargets[phase.fromIdx].spinTop;
       const toSt = this.shapeTargets[phase.toIdx].spinTop;
-      if (toSt) {
-        m.shapeIdx = phase.toIdx;
-        m.pivotY = toSt.pivotY;
-        const blendT = phase.t; // 0→1 over full transition
-        const tilt = (toSt.tilt + (toSt.nutationAmp > 0 ? Math.sin(this.precessionAngles[phase.toIdx] * toSt.nutationSpeed / toSt.precessionSpeed) * toSt.nutationAmp : 0)) * blendT;
-        const spinA = this.spinAngles[phase.toIdx] * blendT;
-        const precA = this.precessionAngles[phase.toIdx] * blendT;
-        const cp = Math.cos(precA), sp = Math.sin(precA);
+      // Determine which spinTop config is active and blend direction
+      const activeSt = toSt || fromSt;
+      if (activeSt) {
+        const activeIdx = toSt ? phase.toIdx : phase.fromIdx;
+        m.shapeIdx = activeIdx;
+        m.pivotY = activeSt.pivotY;
+        // toSt: identity → spinTop (blendT = phase.t)
+        // fromSt only: spinTop → identity (blendT = 1 - phase.t)
+        const blendT = toSt ? phase.t : (1 - phase.t);
+        const tilt = (activeSt.tilt + (activeSt.nutationAmp > 0 ? Math.sin(this.precessionAngles[activeIdx] * activeSt.nutationSpeed / activeSt.precessionSpeed) * activeSt.nutationAmp : 0)) * blendT;
+        const spinA = this.spinAngles[activeIdx];
+        const precA = this.precessionAngles[activeIdx];
+        const cp = Math.cos(precA * blendT), sp = Math.sin(precA * blendT);
         const ct = Math.cos(tilt), st2 = Math.sin(tilt);
-        const cs = Math.cos(spinA), ss = Math.sin(spinA);
+        const cs = Math.cos(spinA * blendT), ss = Math.sin(spinA * blendT);
         m.m00 = cp * ct * cs - sp * ss;
         m.m01 = -cp * st2;
         m.m02 = cp * ct * ss + sp * cs;
