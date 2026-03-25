@@ -87,10 +87,10 @@ export const models: ModelData[] = [
   { id: 1, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.45, position: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, radialSize: { min: 0.5, max: 0.6 }, spinTop: { tilt: 0, spinSpeed: 0.3, precessionSpeed: 0.4, nutationAmp: 0.3491, nutationSpeed: 1.5, pivotY: -4 }, enterTransition: { noRotation: false, scatterScale: 0.03 }, lighting: { ambient: 0.1, diffuse: 1.0, specular: 6.0, shininess: 3.0 } },
   // 씬 04: Model2
   { id: 2, name: 'Model2', modelPath: '/models/2.glb', scale: 0.35, position: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 } },
-  // 씬 05: Circle
-  { id: 3, name: 'Circle', modelPath: '/models/0324_circle_1.glb', scale: 0.35, position: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 } },
-  // 씬 06: LineSphere
-  { id: 4, name: 'LineSphere', modelPath: '/models/0324_line-sphere_3.glb', scale: 0.35, position: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 } },
+  // 씬 05: Circle (다음 배포에서 활성화)
+  // { id: 3, name: 'Circle', modelPath: '/models/0324_circle_1.glb', scale: 0.35, position: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 } },
+  // 씬 06: LineSphere (다음 배포에서 활성화)
+  // { id: 4, name: 'LineSphere', modelPath: '/models/0324_line-sphere_3.glb', scale: 0.35, position: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 } },
 ];
 
 // 파티클 렌더링 모드
