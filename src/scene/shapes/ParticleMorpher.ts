@@ -399,8 +399,7 @@ export class ParticleMorpher {
       const targetSize = 8;
       const normalizeScale = targetSize / maxDimension;
       const isMobile = window.innerWidth < 768;
-      const effectiveScale = (isMobile && config.mobileScale !== undefined) ? config.mobileScale : config.scale;
-      const finalScale = normalizeScale * effectiveScale;
+      const finalScale = normalizeScale; // config.scale은 shapeScale로 런타임 적용
 
       // activeCount 범위만 스케일 적용 (초과분은 이미 0)
       for (let i = 0; i < activeCount * 3; i++) {
@@ -487,7 +486,7 @@ export class ParticleMorpher {
         radialSize: radialSizeData,
         depthSize: depthSizeData,
         spinTop: spinTopData,
-        shapeScale: 1.0,
+        shapeScale: (isMobile && config.mobileScale !== undefined) ? config.mobileScale : config.scale,
         autoRotateSpeed: config.autoRotateSpeed,
         lighting: config.lighting,
         enterTransition: config.enterTransition,

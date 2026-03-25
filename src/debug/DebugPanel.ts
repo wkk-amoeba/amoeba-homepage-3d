@@ -278,21 +278,14 @@ export class DebugPanel {
       const sceneNum = index + 2; // Sphere(0)→씬1-2, Gyro(1)→씬3, Model2(2)→씬4 ...
       const folder = this.gui.addFolder(`씬 ${sceneNum}`);
 
-      // Production + Dev 공통: depthSize, Gyro scale
-      if (shape.depthSize) {
-        const ds = shape.depthSize;
-        folder.add(ds, 'min', 0, 1.0, 0.05).name('Particle Size Min');
-        folder.add(ds, 'max', 0, 2.0, 0.05).name('Particle Size Max');
-      }
-
-      if (shape.name === 'Gyro') {
-        folder.add(shape, 'shapeScale', 0.3, 2.0, 0.05).name('Scale');
-      }
+      // Production + Dev 공통: scale
+      folder.add(shape, 'shapeScale', 0.3, 2.0, 0.05).name('Scale');
 
       if (isDev) {
-        // Shape scale (non-Gyro — Gyro는 위에서 이미 추가)
-        if (shape.name !== 'Gyro') {
-          folder.add(shape, 'shapeScale', 0.3, 2.0, 0.05).name('Scale');
+        if (shape.depthSize) {
+          const ds = shape.depthSize;
+          folder.add(ds, 'min', 0, 1.0, 0.05).name('Particle Size Min');
+          folder.add(ds, 'max', 0, 2.0, 0.05).name('Particle Size Max');
         }
 
         const params = {
