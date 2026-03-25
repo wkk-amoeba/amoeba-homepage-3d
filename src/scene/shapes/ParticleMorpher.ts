@@ -267,6 +267,10 @@ export class ParticleMorpher {
   /** Register a per-frame updater for a shape (e.g., animated FBX walking) */
   setShapeUpdater(shapeIdx: number, updater: (delta: number, scrollProgress: number) => void) {
     this.shapeUpdaters.set(shapeIdx, updater);
+    // shapeUpdater가 자체적으로 크기를 관리하므로 shapeScale 이중 적용 방지
+    if (shapeIdx >= 0 && shapeIdx < this.shapeTargets.length) {
+      this.shapeTargets[shapeIdx].shapeScale = 1.0;
+    }
   }
 
   /** Get precomputed section bounds for a shape index */
