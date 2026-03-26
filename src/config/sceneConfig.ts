@@ -93,11 +93,11 @@ export const models: ModelData[] = [
   // 씬 04: Model2
   { id: 2, name: 'Model2', modelPath: '/models/2.glb', scale: 0.35, position: [0, 0, 0], rotation: [0, 0, 0.2618], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 } },
   // 씬 05: Circle
-  { id: 3, name: 'Circle', modelPath: '/models/0324_circle_1.glb', scale: 0.35, position: [0, 0, 0], rotation: [0, 0, 0.1], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 } },
+  { id: 3, name: 'Circle', modelPath: '/models/0324_circle_1.glb', scale: 0.35, position: [0, 0, 0], rotation: [0, 0, 0.1], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.25, max: 0.8 }, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 } },
   // 씬 06: LineSphere — spinTop으로 틸트된 축 기준 자전 (precession/nutation 없음)
-  { id: 4, name: 'LineSphere', modelPath: '/models/0324_line-sphere_3.glb', scale: 0.35, position: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, spinTop: { tilt: 0.4, spinSpeed: 0.15, precessionSpeed: 0, nutationAmp: 0, nutationSpeed: 0, pivotY: 0 }, autoRotateSpeed: 0, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 } },
+  { id: 4, name: 'LineSphere', modelPath: '/models/0324_line-sphere_3.glb', scale: 0.35, position: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.4, max: 0.8 }, spinTop: { tilt: 0.4, spinSpeed: 0.15, precessionSpeed: 0, nutationAmp: 0, nutationSpeed: 0, pivotY: 0 }, autoRotateSpeed: 0, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 } },
   // 씬 07: LineSphere4 — spinTop으로 틸트된 축 기준 자전 (precession/nutation 없음)
-  { id: 5, name: 'LineSphere4', modelPath: '/models/0325_line-sphere_4.glb', scale: 0.35, position: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, spinTop: { tilt: 0.2618, spinSpeed: 0.15, precessionSpeed: 0, nutationAmp: 0, nutationSpeed: 0, pivotY: 0 }, autoRotateSpeed: 0, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 } },
+  { id: 5, name: 'LineSphere4', modelPath: '/models/0325_line-sphere_4.glb', scale: 0.35, position: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.45, max: 0.8 }, spinTop: { tilt: 0.2618, spinSpeed: 0.15, precessionSpeed: 0, nutationAmp: 0, nutationSpeed: 0, pivotY: 0 }, autoRotateSpeed: 0, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 } },
   // 씬 08: Twist
   { id: 6, name: 'Twist', modelPath: '/models/twist_0325_2.glb', scale: 0.8, position: [0, 0, 0], rotation: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.7, max: 0.8 }, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 }, hideBackground: true, disableParallax: true },
   // 씬 09: TwistBar — 프로그래밍 생성 (helixBarUpdater.ts), 타원 나선 무한 애니메이션
