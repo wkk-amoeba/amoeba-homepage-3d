@@ -19,7 +19,7 @@ interface ShapeTarget {
   configScale: number;       // 원본 config.scale 값 (패널 표시용)
   autoRotateSpeed?: number; // 모델별 자전 속도 오버라이드
   lighting?: { ambient?: number; diffuse?: number; specular?: number; shininess?: number };
-  enterTransition?: { noRotation?: boolean; gravity?: boolean; gravityHeight?: number; gravityDuration?: number; gravityWobbleFreq?: number; scatterScale?: number };
+  enterTransition?: { noRotation?: boolean; gravity?: boolean; gravityHeight?: number; gravityDuration?: number; gravityWobbleFreq?: number; scatterScale?: number; slideDown?: boolean; slideDownHeight?: number; slideDownDuration?: number };
   particleCenters?: Float32Array;    // per-particle 조명 중심 (count * 3, 위성별 개별 중심)
   usePerParticleCenter?: number;     // 0=shapeCenter uniform 사용, 1=particleCenters attribute 사용
 }
