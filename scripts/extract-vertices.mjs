@@ -31,6 +31,9 @@ const MODELS = [
   { name: 'model_2', file: '2.glb' },
   { name: 'circle_1', file: '0324_circle_1.glb' },
   { name: 'line_sphere_3', file: '0324_line-sphere_3.glb' },
+  { name: '0325_line-sphere_4', file: '0325_line-sphere_4.glb' },
+  { name: 'twist_0325', file: 'twist_0325.glb' },
+  { name: 'twist_0325_2', file: 'twist_0325_2.glb' },
 ];
 
 const MAX_VERTICES = 15_000;

@@ -163,6 +163,11 @@ export class SceneManager {
     if (this.particleMorpher) {
       this.particleMorpher.update(delta, scrollProgress, this.mouseWorldPos, this.mouse, this.mouseSpeed);
       this.background.setObjectCenter(this.particleMorpher.getEffectiveCenter());
+
+      // per-model hideBackground
+      const shapeIdx = this.particleMorpher.getCurrentShapeIdx(scrollProgress);
+      const shouldHide = models[shapeIdx]?.hideBackground === true;
+      this.background.visible = !shouldHide;
     }
     this.background.updateParallax(this.mouse);
     this.background.update(delta);

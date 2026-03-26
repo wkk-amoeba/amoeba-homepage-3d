@@ -113,15 +113,15 @@ export class DebugPanel {
       }
 
       // Scene 3
-      if (gyroShape) {
-        gyroShape.shapeScale = saved.scene3.shapeScale;
+      if (gyroShape && gyroShape.configScale > 0) {
+        gyroShape.shapeScale = saved.scene3.shapeScale / gyroShape.configScale;
       }
 
-      // All shape scales
+      // All shape scales (저장값 = configScale * shapeScale → shapeScale 복원)
       if (saved.shapeScales) {
         for (const shape of shapeTargets) {
-          if (saved.shapeScales[shape.name] !== undefined) {
-            shape.shapeScale = saved.shapeScales[shape.name];
+          if (saved.shapeScales[shape.name] !== undefined && shape.configScale > 0) {
+            shape.shapeScale = saved.shapeScales[shape.name] / shape.configScale;
           }
         }
       }
@@ -185,8 +185,8 @@ export class DebugPanel {
           shininess: o2l?.shininess ?? 1.0,
         },
       },
-      scene3: { shapeScale: gyroShape?.shapeScale ?? 1.0 },
-      shapeScales: Object.fromEntries(shapeTargets.map(s => [s.name, s.shapeScale])),
+      scene3: { shapeScale: (gyroShape?.configScale ?? 1) * (gyroShape?.shapeScale ?? 1) },
+      shapeScales: Object.fromEntries(shapeTargets.map(s => [s.name, s.configScale * s.shapeScale])),
     });
 
     // ── Scene folders (production + dev 공통: 씬 번호 기반) ──
@@ -278,8 +278,14 @@ export class DebugPanel {
       const sceneNum = index + 2; // Sphere(0)→씬1-2, Gyro(1)→씬3, Model2(2)→씬4 ...
       const folder = this.gui.addFolder(`씬 ${sceneNum}`);
 
-      // Production + Dev 공통: scale
-      folder.add(shape, 'shapeScale', 0.3, 2.0, 0.05).name('Scale');
+      // Production + Dev 공통: scale (shapeUpdater shape은 자체 좌표계이므로 제외)
+      if (!morpher.hasShapeUpdater(index)) {
+        const cs = shape.configScale;
+        const scaleProxy = { scale: cs * shape.shapeScale };
+        folder.add(scaleProxy, 'scale', 0.1, 2.0, 0.05).name('Scale').onChange((v: number) => {
+          shape.shapeScale = v / cs;
+        });
+      }
 
       if (isDev) {
         if (shape.depthSize) {
