@@ -196,13 +196,12 @@ export function registerHelixBarUpdater(
       const barStart = bar * c.particlesPerBar;
       const barEnd = Math.min(barStart + c.particlesPerBar, count);
 
-      // 각 막대의 현재 각도 = 기본 각도 + 시간 오프셋
+      // 각 막대의 현재 각도 = 기본 각도 + 시간 오프셋, totalAngleSpan으로 순환
       const baseAngle = bar * gapRad;
-      const currentAngle = baseAngle + timeAngle;
+      const currentAngle = ((baseAngle + timeAngle) % totalAngleSpan + totalAngleSpan) % totalAngleSpan;
 
-      // Y 위치: 각도에 비례해 하강, totalHeight 범위 내에서 순환
-      const rawY = (currentAngle * pitchPerRad) % totalHeight;
-      const centerY = halfHeight - rawY;
+      // Y 위치: 각도에 비례해 하강
+      const centerY = halfHeight - currentAngle * pitchPerRad;
 
       // 타원 경로 위 X, Z
       const centerX = c.ellipseA * Math.cos(currentAngle);

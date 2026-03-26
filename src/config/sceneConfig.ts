@@ -61,6 +61,9 @@ export interface ModelData {
     gravityDuration?: number;  // 낙하 재생 시간 (초, 기본 3.0)
     gravityWobbleFreq?: number; // 낙하 흔들림 진동 주파수 (Hz, 기본 4.0)
     scatterScale?: number;     // scatter 배율 오버라이드 (기본 particleConfig.scatterScale)
+    slideDown?: boolean;       // 오브젝트 전체가 위에서 회전하며 내려오는 효과 (기본 false)
+    slideDownHeight?: number;  // 슬라이드 시작 Y 오프셋 (기본 12)
+    slideDownDuration?: number; // 슬라이드 소요 시간 (초, 기본 2.0)
   };
   hideBackground?: boolean;    // hold 시 배경 파티클 숨김 (기본 false)
   disableParallax?: boolean;   // hold 시 마우스 시차 효과 비활성 (기본 false)
@@ -84,21 +87,21 @@ export interface ModelData {
 // └─────────────────────────────────────────────────────────────────────────┘
 export const models: ModelData[] = [
   // 씬 01-02: Sphere — GLB 메시의 비균일 버텍스 분포가 자연스러운 파티클 표현에 필요. lighting/holdScatter는 sphereUnified.ts 서브섹션별로 런타임 덮어씌워짐
-  { id: 0, name: 'Sphere', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [0, 0, 0], holdScatter: 0.015, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.15, diffuse: 0.4, specular: 1.0, shininess: 2.0 }, },
+  { id: 0, name: 'Sphere', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [0, 0, 0], holdScatter: 0.015, sectionSpan: 2, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.15, diffuse: 0.4, specular: 1.0, shininess: 2.0 }, },
   // 씬 03: Gyro
   { id: 1, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.45, position: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, radialSize: { min: 0.5, max: 0.6 }, spinTop: { tilt: 0, spinSpeed: 0.3, precessionSpeed: 0.4, nutationAmp: 0.3491, nutationSpeed: 1.5, pivotY: -4 }, enterTransition: { noRotation: false, scatterScale: 0.03 }, lighting: { ambient: 0.1, diffuse: 1.0, specular: 6.0, shininess: 3.0 } },
   // 씬 04: Model2
   { id: 2, name: 'Model2', modelPath: '/models/2.glb', scale: 0.35, position: [0, 0, 0], rotation: [0, 0, 0.2618], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 } },
   // 씬 05: Circle
   { id: 3, name: 'Circle', modelPath: '/models/0324_circle_1.glb', scale: 0.35, position: [0, 0, 0], rotation: [0, 0, 0.1], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 } },
-  // 씬 06: LineSphere
-  { id: 4, name: 'LineSphere', modelPath: '/models/0324_line-sphere_3.glb', scale: 0.35, position: [0, 0, 0], rotation: [0, 0, 0.4], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 } },
-  // 씬 07: LineSphere4
-  { id: 5, name: 'LineSphere4', modelPath: '/models/0325_line-sphere_4.glb', scale: 0.35, position: [0, 0, 0], rotation: [0, 0, 0.2618], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 } },
+  // 씬 06: LineSphere — spinTop으로 틸트된 축 기준 자전 (precession/nutation 없음)
+  { id: 4, name: 'LineSphere', modelPath: '/models/0324_line-sphere_3.glb', scale: 0.35, position: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, spinTop: { tilt: 0.4, spinSpeed: 0.15, precessionSpeed: 0, nutationAmp: 0, nutationSpeed: 0, pivotY: 0 }, autoRotateSpeed: 0, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 } },
+  // 씬 07: LineSphere4 — spinTop으로 틸트된 축 기준 자전 (precession/nutation 없음)
+  { id: 5, name: 'LineSphere4', modelPath: '/models/0325_line-sphere_4.glb', scale: 0.35, position: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, spinTop: { tilt: 0.2618, spinSpeed: 0.15, precessionSpeed: 0, nutationAmp: 0, nutationSpeed: 0, pivotY: 0 }, autoRotateSpeed: 0, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 } },
   // 씬 08: Twist
-  { id: 6, name: 'Twist', modelPath: '/models/twist_0325_2.glb', scale: 1.0, position: [0, 0, 0], rotation: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.5, max: 0.8 }, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 }, hideBackground: true, disableParallax: true },
+  { id: 6, name: 'Twist', modelPath: '/models/twist_0325_2.glb', scale: 0.8, position: [0, 0, 0], rotation: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.7, max: 0.8 }, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 }, hideBackground: true, disableParallax: true },
   // 씬 09: TwistBar — 프로그래밍 생성 (helixBarUpdater.ts), 타원 나선 무한 애니메이션
-  { id: 7, name: 'TwistBar', scale: 1.0, particleCount: 15000, position: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, autoRotateSpeed: 0, depthSize: { min: 0.8, max: 0.8 }, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 }, disableParallax: true },
+  { id: 7, name: 'TwistBar', scale: 1.0, particleCount: 30000, position: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, autoRotateSpeed: 0, depthSize: { min: 0.4, max: 0.8 }, lighting: { ambient: 0.4, diffuse: 1.0, specular: 1.0, shininess: 2.0 }, hideBackground: true, disableParallax: true },
 ];
 
 // 파티클 렌더링 모드
