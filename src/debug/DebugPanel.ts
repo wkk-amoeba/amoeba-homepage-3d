@@ -45,7 +45,9 @@ export class DebugPanel {
     this.gui = new GUI({ title: 'Particle Debug' });
 
     // Collapse by default in production
-    // (현재 펼침 상태 기본)
+    if (!import.meta.env.DEV) {
+      this.gui.close();
+    }
 
     // Wait for models to load before building UI
     setTimeout(() => this.buildUI(sceneManager), 1500);
