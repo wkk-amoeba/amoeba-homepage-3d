@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { getCircleTexture } from '../../utils/circleTexture';
-import { ModelData, scrollConfig, animationPhases, particleConfig, introConfig, getParticleMultiplier, PERFORMANCE_CONFIG } from '../../config/sceneConfig';
+import { ModelData, models, scrollConfig, animationPhases, particleConfig, introConfig, getParticleMultiplier, PERFORMANCE_CONFIG } from '../../config/sceneConfig';
 import { createShapePoints } from '../../utils/shapeGenerators';
 
 interface ShapeTarget {
@@ -16,6 +16,7 @@ interface ShapeTarget {
   depthSize?: { min: number; max: number; zMin: number; zMax: number }; // Z 깊이 기반 크기
   spinTop?: { tilt: number; spinSpeed: number; precessionSpeed: number; nutationAmp: number; nutationSpeed: number; pivotY: number };
   shapeScale: number;        // 런타임 per-shape 스케일 (디버그 패널용, 기본 1.0)
+  configScale: number;       // 원본 config.scale 값 (패널 표시용)
   autoRotateSpeed?: number; // 모델별 자전 속도 오버라이드
   lighting?: { ambient?: number; diffuse?: number; specular?: number; shininess?: number };
   enterTransition?: { noRotation?: boolean; gravity?: boolean; gravityHeight?: number; gravityDuration?: number; gravityWobbleFreq?: number; scatterScale?: number };
@@ -254,6 +255,12 @@ export class ParticleMorpher {
     this.lightShininessUniform.value = v;
   }
 
+  /** 현재 활성 shape index (hold 시) 또는 전환 대상 shape index */
+  getCurrentShapeIdx(scrollProgress: number): number {
+    const phase = this.getPhase(scrollProgress);
+    return phase.type === 'hold' ? phase.shapeIdx : phase.toIdx;
+  }
+
   /** 현재 적용 중인 라이팅 uniform 값 (디버그용) */
   getCurrentLighting() {
     return {
@@ -267,10 +274,14 @@ export class ParticleMorpher {
   /** Register a per-frame updater for a shape (e.g., animated FBX walking) */
   setShapeUpdater(shapeIdx: number, updater: (delta: number, scrollProgress: number) => void) {
     this.shapeUpdaters.set(shapeIdx, updater);
-    // shapeUpdater가 자체적으로 크기를 관리하므로 shapeScale 이중 적용 방지
+    // shapeUpdater는 자체 좌표계로 positions를 생성하므로 shapeScale 적용 안 함
     if (shapeIdx >= 0 && shapeIdx < this.shapeTargets.length) {
       this.shapeTargets[shapeIdx].shapeScale = 1.0;
     }
+  }
+
+  hasShapeUpdater(shapeIdx: number): boolean {
+    return this.shapeUpdaters.has(shapeIdx);
   }
 
   /** Get precomputed section bounds for a shape index */
@@ -403,7 +414,8 @@ export class ParticleMorpher {
       const targetSize = 8;
       const normalizeScale = targetSize / maxDimension;
       const isMobile = window.innerWidth < 768;
-      const finalScale = normalizeScale; // config.scale은 shapeScale로 런타임 적용
+      const effectiveScale = (isMobile && config.mobileScale !== undefined) ? config.mobileScale : config.scale;
+      const finalScale = normalizeScale * effectiveScale;
 
       // activeCount 범위만 스케일 적용 (초과분은 이미 0)
       for (let i = 0; i < activeCount * 3; i++) {
@@ -490,7 +502,8 @@ export class ParticleMorpher {
         radialSize: radialSizeData,
         depthSize: depthSizeData,
         spinTop: spinTopData,
-        shapeScale: (isMobile && config.mobileScale !== undefined) ? config.mobileScale : config.scale,
+        shapeScale: 1.0,
+        configScale: effectiveScale,
         autoRotateSpeed: config.autoRotateSpeed,
         lighting: config.lighting,
         enterTransition: config.enterTransition,
@@ -854,10 +867,13 @@ void main() {`
   }
 
   /** Parallax rotation based on mouse position */
-  private updateParallax(mouseNorm?: THREE.Vector2) {
+  private updateParallax(mouseNorm?: THREE.Vector2, scrollProgress?: number) {
     if (!this.points) return;
-    const pStr = particleConfig.parallaxStrength;
-    if (mouseNorm) {
+    // per-model disableParallax
+    const disabled = scrollProgress !== undefined &&
+      models[this.getCurrentShapeIdx(scrollProgress)]?.disableParallax === true;
+    const pStr = disabled ? 0 : particleConfig.parallaxStrength;
+    if (mouseNorm && !disabled) {
       this.parallaxRotX += (-mouseNorm.y * pStr - this.parallaxRotX) * 0.05;
       this.parallaxRotY += (mouseNorm.x * pStr - this.parallaxRotY) * 0.05;
     } else {
@@ -1516,7 +1532,7 @@ void main() {`
     this.updateAutoRotation(delta, scrollProgress);
     this.updateLightingUniforms(scrollProgress);
     this.updateSpinTopAngles(delta);
-    this.updateParallax(mouseNorm);
+    this.updateParallax(mouseNorm, scrollProgress);
 
     // --- Intro animation: particles gather to form first shape ---
     if (this.updateIntroAnimation(delta)) return;
