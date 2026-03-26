@@ -1,70 +1,94 @@
 /**
  * 씬 09: 타원형 나선 경로를 따라 막대(bar)들이 무한히 내려오는 애니메이션.
  *
- * 구조:
- * - 위에서 보면 타원(ellipse) 경로
- * - 막대들이 타원 나선을 따라 위→아래로 연속 이동
- * - 화면 밖으로 나간 막대는 상단에서 재등장 (무한 루프)
- * - 각 막대는 수직 직사각형 (Y축 방향)
+ * 파라미터 설계:
+ * - barGap: 막대 사이 각도 간격 (도). 직관적으로 간격 조절
+ * - pitch: 1회전(360도)당 Y 하강 거리. 위아래 나선 간격 조절
+ * - speed: 각속도 (도/초). 이동 속도 조절
+ * - 회전수는 barCount × barGap / 360 으로 자동 결정
+ *
+ * Window 방식: 모든 막대가 항상 화면 내에 존재, 아래로 빠지면 위에서 재등장
  */
 
 import { ParticleMorpher } from '../scene/shapes/ParticleMorpher';
 
 export interface HelixBarConfig {
-  barCount: number;          // 나선 위 막대 개수
+  barCount: number;          // 막대 개수
   barHeight: number;         // 각 막대의 높이
-  barWidth: number;          // 각 막대의 폭 (X 로컬)
-  barDepth: number;          // 각 막대의 두께 (Z 로컬)
+  barWidth: number;          // 각 막대의 폭
+  barDepth: number;          // 각 막대의 두께
   ellipseA: number;          // 타원 반장축 (X)
   ellipseB: number;          // 타원 반단축 (Z)
-  helixTurns: number;        // 나선 총 회전수
-  helixHeight: number;       // 나선 전체 높이
-  speed: number;             // 이동 속도 (turns/sec)
+  barGap: number;            // 막대 사이 각도 간격 (도)
+  pitch: number;             // 1회전(360도)당 Y 하강 거리
+  speed: number;             // 각속도 (도/초)
   particlesPerBar: number;   // 막대당 파티클 수
+  introBarInterval: number;  // 인트로 시 막대 추가 간격 (초, 0=인트로 없음)
 }
 
 const DEFAULT_CONFIG: HelixBarConfig = {
   barCount: 100,
-  barHeight: 2.5, // 1.2
-  barWidth: 0.5, // 0.15
-  barDepth: 0.08, // 0.08
-  ellipseA: 4.0, // 3.0
-  ellipseB: 1.5, // 1.5
-  helixTurns: 3, // 3
-  helixHeight: 10, // 10
-  speed: 0.01,
-  particlesPerBar: 500,
+  barHeight: 2.0,
+  barWidth: 0.5,
+  barDepth: 0.2, //0.08
+  ellipseA: 4.0,
+  ellipseB: 0.1,
+  barGap: 12,              // 12도 간격 → 30개로 1회전
+  pitch: 3.0,              // 1회전당 3유닛 하강
+  speed: 10,                // 5도/초
+  particlesPerBar: 300,    // 100 × 150 = 15,000
+  introBarInterval: 0.15,  // 0.15초마다 막대 1개 추가 (0=인트로 없음)
 };
 
 /**
  * 초기 위치 생성 (precomputedPositions용)
- * ParticleMorpher가 로딩할 때 사용
  */
 export function generateHelixBarPositions(config?: Partial<HelixBarConfig>): Float32Array {
   const c = { ...DEFAULT_CONFIG, ...config };
   const totalParticles = c.barCount * c.particlesPerBar;
   const positions = new Float32Array(totalParticles * 3);
 
-  // 초기 프레임 (t=0) 스냅샷
+  const gapRad = c.barGap * Math.PI / 180;
+  const pitchPerRad = c.pitch / (Math.PI * 2);
+  const totalAngleSpan = c.barCount * gapRad;
+  const totalHeight = totalAngleSpan * pitchPerRad;
+  const halfHeight = totalHeight / 2;
+
   for (let bar = 0; bar < c.barCount; bar++) {
-    // 나선 위 균일 배치 (0~1)
-    const t = bar / c.barCount;
-    const angle = t * c.helixTurns * Math.PI * 2;
+    const angle = bar * gapRad;
     const centerX = c.ellipseA * Math.cos(angle);
     const centerZ = c.ellipseB * Math.sin(angle);
-    const centerY = (0.5 - t) * c.helixHeight;
+    const centerY = halfHeight - angle * pitchPerRad; // 원점 중심 정렬
 
     for (let p = 0; p < c.particlesPerBar; p++) {
       const idx = (bar * c.particlesPerBar + p) * 3;
+      const hw = c.barWidth / 2, hd = c.barDepth / 2, hh = c.barHeight / 2;
+      let localX: number, localY: number, localZ: number;
 
-      // 막대 내부 랜덤 위치
-      const localY = (Math.random() - 0.5) * c.barHeight;
-      let localX: number, localZ: number;
-
-      // 70% 표면, 30% 내부
-      if (Math.random() < 0.7) {
+      const r = Math.random();
+      if (r < 1.0) {
+        // 50% → 모서리(edge): 12개 중 랜덤 선택, 한 축만 랜덤
+        const edge = Math.floor(Math.random() * 12);
+        if (edge < 4) {
+          // Y축 방향 4개 모서리 (barHeight 방향)
+          localY = (Math.random() - 0.5) * c.barHeight;
+          localX = (edge & 1) ? hw : -hw;
+          localZ = (edge & 2) ? hd : -hd;
+        } else if (edge < 8) {
+          // X축 방향 4개 모서리 (barWidth 방향)
+          localX = (Math.random() - 0.5) * c.barWidth;
+          localY = (edge & 1) ? hh : -hh;
+          localZ = (edge & 2) ? hd : -hd;
+        } else {
+          // Z축 방향 4개 모서리 (barDepth 방향)
+          localZ = (Math.random() - 0.5) * c.barDepth;
+          localX = (edge & 1) ? hw : -hw;
+          localY = (edge & 2) ? hh : -hh;
+        }
+      } else if (r < 0.9) {
+        // 40% → 표면(face)
+        localY = (Math.random() - 0.5) * c.barHeight;
         const face = Math.floor(Math.random() * 4);
-        const hw = c.barWidth / 2, hd = c.barDepth / 2;
         switch (face) {
           case 0: localX = (Math.random() - 0.5) * c.barWidth; localZ = hd; break;
           case 1: localX = (Math.random() - 0.5) * c.barWidth; localZ = -hd; break;
@@ -72,7 +96,9 @@ export function generateHelixBarPositions(config?: Partial<HelixBarConfig>): Flo
           default: localX = -hw; localZ = (Math.random() - 0.5) * c.barDepth; break;
         }
       } else {
+        // 10% → 내부
         localX = (Math.random() - 0.5) * c.barWidth;
+        localY = (Math.random() - 0.5) * c.barHeight;
         localZ = (Math.random() - 0.5) * c.barDepth;
       }
 
@@ -86,7 +112,12 @@ export function generateHelixBarPositions(config?: Partial<HelixBarConfig>): Flo
 }
 
 /**
- * shapeUpdater 등록: 매 프레임 막대들을 나선 경로를 따라 이동
+ * shapeUpdater 등록
+ *
+ * 각 막대는 고유한 기본 각도(bar * barGap)를 가짐.
+ * 시간이 흐르면 모든 막대의 각도가 동일하게 증가 (speed 도/초).
+ * Y 위치 = -angle * pitchPerRad 로 각도에 비례해 하강.
+ * 전체 나선 높이(totalHeight) 범위를 벗어나면 모듈러로 순환.
  */
 export function registerHelixBarUpdater(
   morpher: ParticleMorpher,
@@ -98,27 +129,58 @@ export function registerHelixBarUpdater(
 
   let elapsed = 0;
 
-  // 각 막대 내 파티클의 로컬 오프셋을 사전 계산 (프레임마다 재생성하지 않도록)
-  const barLocalOffsets = new Float32Array(c.particlesPerBar * 3);
-  for (let p = 0; p < c.particlesPerBar; p++) {
-    const localY = (Math.random() - 0.5) * c.barHeight;
-    let localX: number, localZ: number;
-    if (Math.random() < 0.7) {
-      const face = Math.floor(Math.random() * 4);
-      const hw = c.barWidth / 2, hd = c.barDepth / 2;
-      switch (face) {
-        case 0: localX = (Math.random() - 0.5) * c.barWidth; localZ = hd; break;
-        case 1: localX = (Math.random() - 0.5) * c.barWidth; localZ = -hd; break;
-        case 2: localX = hw; localZ = (Math.random() - 0.5) * c.barDepth; break;
-        default: localX = -hw; localZ = (Math.random() - 0.5) * c.barDepth; break;
+  const gapRad = c.barGap * Math.PI / 180;
+  const pitchPerRad = c.pitch / (Math.PI * 2);
+
+  // 전체 나선이 차지하는 높이 (barCount개 막대의 총 높이)
+  const totalAngleSpan = c.barCount * gapRad;
+  const totalHeight = totalAngleSpan * pitchPerRad;
+  const halfHeight = totalHeight / 2;
+
+  // 막대별 로컬 오프셋 사전 계산
+  const allBarOffsets = new Float32Array(c.barCount * c.particlesPerBar * 3);
+  for (let bar = 0; bar < c.barCount; bar++) {
+    for (let p = 0; p < c.particlesPerBar; p++) {
+      const idx = (bar * c.particlesPerBar + p) * 3;
+      const hw = c.barWidth / 2, hd = c.barDepth / 2, hh = c.barHeight / 2;
+      let localX: number, localY: number, localZ: number;
+
+      const r = Math.random();
+      if (r < 1.0) {
+        // 50% → 모서리(edge)
+        const edge = Math.floor(Math.random() * 12);
+        if (edge < 4) {
+          localY = (Math.random() - 0.5) * c.barHeight;
+          localX = (edge & 1) ? hw : -hw;
+          localZ = (edge & 2) ? hd : -hd;
+        } else if (edge < 8) {
+          localX = (Math.random() - 0.5) * c.barWidth;
+          localY = (edge & 1) ? hh : -hh;
+          localZ = (edge & 2) ? hd : -hd;
+        } else {
+          localZ = (Math.random() - 0.5) * c.barDepth;
+          localX = (edge & 1) ? hw : -hw;
+          localY = (edge & 2) ? hh : -hh;
+        }
+      } else if (r < 0.9) {
+        // 40% → 표면(face)
+        localY = (Math.random() - 0.5) * c.barHeight;
+        const face = Math.floor(Math.random() * 4);
+        switch (face) {
+          case 0: localX = (Math.random() - 0.5) * c.barWidth; localZ = hd; break;
+          case 1: localX = (Math.random() - 0.5) * c.barWidth; localZ = -hd; break;
+          case 2: localX = hw; localZ = (Math.random() - 0.5) * c.barDepth; break;
+          default: localX = -hw; localZ = (Math.random() - 0.5) * c.barDepth; break;
+        }
+      } else {
+        localX = (Math.random() - 0.5) * c.barWidth;
+        localY = (Math.random() - 0.5) * c.barHeight;
+        localZ = (Math.random() - 0.5) * c.barDepth;
       }
-    } else {
-      localX = (Math.random() - 0.5) * c.barWidth;
-      localZ = (Math.random() - 0.5) * c.barDepth;
+      allBarOffsets[idx] = localX;
+      allBarOffsets[idx + 1] = localY;
+      allBarOffsets[idx + 2] = localZ;
     }
-    barLocalOffsets[p * 3] = localX;
-    barLocalOffsets[p * 3 + 1] = localY;
-    barLocalOffsets[p * 3 + 2] = localZ;
   }
 
   morpher.setShapeUpdater(shapeIdx, (delta: number, _scrollProgress: number) => {
@@ -127,30 +189,32 @@ export function registerHelixBarUpdater(
     const positions = shape.positions;
     const count = Math.min(shape.activeCount, c.barCount * c.particlesPerBar);
 
-    // 시간에 따른 오프셋 (0~1 루프)
-    const timeOffset = (elapsed * c.speed) % 1;
+    // 시간에 따른 각도 오프셋 (라디안)
+    const timeAngle = elapsed * c.speed * Math.PI / 180;
 
     for (let bar = 0; bar < c.barCount; bar++) {
-      // 나선 위 위치: t가 1을 넘으면 0으로 순환 (무한 루프)
-      const rawT = (bar / c.barCount + timeOffset) % 1;
-      const angle = rawT * c.helixTurns * Math.PI * 2;
-
-      // 타원 경로 위 중심 좌표
-      const centerX = c.ellipseA * Math.cos(angle);
-      const centerZ = c.ellipseB * Math.sin(angle);
-      const centerY = (0.5 - rawT) * c.helixHeight;
-
-      // 이 막대의 파티클들 업데이트
       const barStart = bar * c.particlesPerBar;
       const barEnd = Math.min(barStart + c.particlesPerBar, count);
 
+      // 각 막대의 현재 각도 = 기본 각도 + 시간 오프셋
+      const baseAngle = bar * gapRad;
+      const currentAngle = baseAngle + timeAngle;
+
+      // Y 위치: 각도에 비례해 하강, totalHeight 범위 내에서 순환
+      const rawY = (currentAngle * pitchPerRad) % totalHeight;
+      const centerY = halfHeight - rawY;
+
+      // 타원 경로 위 X, Z
+      const centerX = c.ellipseA * Math.cos(currentAngle);
+      const centerZ = c.ellipseB * Math.sin(currentAngle);
+
       for (let i = barStart; i < barEnd; i++) {
-        const localIdx = (i - barStart) * 3;
+        const offIdx = i * 3;
         const idx = i * 3;
 
-        positions[idx] = centerX + barLocalOffsets[localIdx];
-        positions[idx + 1] = centerY + barLocalOffsets[localIdx + 1];
-        positions[idx + 2] = centerZ + barLocalOffsets[localIdx + 2];
+        positions[idx] = centerX + allBarOffsets[offIdx];
+        positions[idx + 1] = centerY + allBarOffsets[offIdx + 1];
+        positions[idx + 2] = centerZ + allBarOffsets[offIdx + 2];
       }
     }
   });
