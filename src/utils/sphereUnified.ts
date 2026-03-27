@@ -199,6 +199,12 @@ export interface UnifiedSphereConfig {
   orbital2MainParticleRatio?: number;
   // 위성 최대 Z좌표 (카메라 방향 제한). 0=메인 중심까지, 음수=더 뒤로
   orbital2MaxSatZ?: number;
+  // 서브섹션별 위치 오프셋 [x, y, z] (기본 [0,0,0])
+  deformOffset?: [number, number, number];
+  orbital2Offset?: [number, number, number];
+  // 서브섹션별 스케일 (기본 1.0, 전체 크기 배율)
+  deformScale?: number;
+  orbital2Scale?: number;
 }
 
 let activeUnifiedConfig: UnifiedSphereConfig | null = null;
@@ -206,14 +212,82 @@ export function getActiveUnifiedConfig(): UnifiedSphereConfig | null {
   return activeUnifiedConfig;
 }
 
-// ─── Registration ───
+// ─── Morpher 타입 ───
+
+type MorpherAPI = {
+  getShapeTargets: () => { positions: Float32Array; activeCount: number; holdScatter: number; lighting?: { ambient?: number; diffuse?: number; specular?: number; shininess?: number }; particleCenters?: Float32Array; usePerParticleCenter?: number }[];
+  setShapeUpdater: (idx: number, fn: (delta: number, scrollProgress: number) => void) => void;
+  getSectionBounds: (idx: number) => { start: number; end: number } | null;
+};
+
+// ─── 씬1: Deform (breathing/crumple) ───
+
+export function registerSphereDeform(morpher: MorpherAPI, shapeIdx: number) {
+  const shape = morpher.getShapeTargets()[shapeIdx];
+  if (!shape) { console.warn(`registerSphereDeform: shape ${shapeIdx} not found`); return; }
+
+  const positions = shape.positions;
+  const count = shape.activeCount;
+  const normals = new Float32Array(count * 3);
+  const radii = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
+    const ox = positions[i*3], oy = positions[i*3+1], oz = positions[i*3+2];
+    const r = Math.sqrt(ox*ox + oy*oy + oz*oz);
+    radii[i] = r;
+    if (r > 0.001) { normals[i*3] = ox/r; normals[i*3+1] = oy/r; normals[i*3+2] = oz/r; }
+  }
+
+  const deformConfig: SphereDeformConfig = {
+    noiseScale: 3.4, maxDeform: 0, breathSpeed: 1.8,
+    breathMin: 0.7, breathMax: 1.0, noiseSpeed: 0.25,
+  };
+
+  let elapsed = 0;
+  morpher.setShapeUpdater(shapeIdx, (delta: number) => {
+    elapsed += delta;
+    computeDeform(positions, count, normals, radii, elapsed, deformConfig);
+  });
+}
+
+// ─── 씬2: Orbital (위성 궤도) ───
+
+export function registerSphereOrbital(morpher: MorpherAPI, shapeIdx: number) {
+  const shape = morpher.getShapeTargets()[shapeIdx];
+  if (!shape) { console.warn(`registerSphereOrbital: shape ${shapeIdx} not found`); return; }
+
+  const positions = shape.positions;
+  const count = shape.activeCount;
+  const normals = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    const ox = positions[i*3], oy = positions[i*3+1], oz = positions[i*3+2];
+    const r = Math.sqrt(ox*ox + oy*oy + oz*oz);
+    if (r > 0.001) { normals[i*3] = ox/r; normals[i*3+1] = oy/r; normals[i*3+2] = oz/r; }
+  }
+
+  const orbitalConfig: MetaballLinearConfig = {
+    mainRadius: 1.00, bobAmplitude: 0.75, bobSpeed: 1.1,
+    satelliteCount: 5, satelliteRadius: 0.2,
+    travelDistance: 2.0, travelSpeed: 0.8, threshold: 1.05,
+  };
+  const mainParticleRatio = 0.80;
+  const maxSatZ = -1.0;
+  const allLinearDirs = makeLinearDirections(8);
+  const satCenters = new Float64Array(8 * 3);
+  const centerBuf = new Float32Array(count * 3);
+
+  let elapsed = 0;
+  morpher.setShapeUpdater(shapeIdx, (delta: number) => {
+    elapsed += delta;
+    computeMetaballLinearSplit(positions, count, normals, elapsed, orbitalConfig, allLinearDirs, satCenters, mainParticleRatio, maxSatZ, centerBuf);
+    shape.particleCenters = centerBuf;
+    shape.usePerParticleCenter = 1;
+  });
+}
+
+// ─── 레거시: registerUnifiedSphere (하위 호환) ───
 
 export function registerUnifiedSphere(
-  morpher: {
-    getShapeTargets: () => { positions: Float32Array; activeCount: number; holdScatter: number; lighting?: { ambient?: number; diffuse?: number; specular?: number; shininess?: number }; particleCenters?: Float32Array; usePerParticleCenter?: number }[];
-    setShapeUpdater: (idx: number, fn: (delta: number, scrollProgress: number) => void) => void;
-    getSectionBounds: (idx: number) => { start: number; end: number } | null;
-  },
+  morpher: MorpherAPI,
   shapeIdx: number,
 ): UnifiedSphereConfig | null {
   const shapeTargets = morpher.getShapeTargets();
@@ -256,6 +330,11 @@ export function registerUnifiedSphere(
     orbital2Lighting: { ambient: 0.2, diffuse: 6.0, specular: 1.0, shininess: 1.0 },
     orbital2MainParticleRatio: 0.80,
     orbital2MaxSatZ: -1.0,
+    // 서브섹션별 위치/크기 (씬1=deform, 씬2=orbital2)
+    deformOffset: [-2, 0, 0],
+    deformScale: 1.0,
+    orbital2Offset: [0, 0, 0],
+    orbital2Scale: 1.0,
   };
 
   const positions = shape.positions;
@@ -407,6 +486,49 @@ export function registerUnifiedSphere(
       const invT = 1 - blendT;
       for (let i = 0; i < count * 3; i++) {
         positions[i] = bufA[i] * invT + bufB[i] * blendT;
+      }
+    }
+
+    // 서브섹션별 offset/scale 적용
+    {
+      const dOff = config.deformOffset ?? [0, 0, 0];
+      const dScl = config.deformScale ?? 1.0;
+      const oOff = config.orbital2Offset ?? [0, 0, 0];
+      const oScl = config.orbital2Scale ?? 1.0;
+
+      let offX: number, offY: number, offZ: number, scl: number;
+      if (localProgress < B - tw) {
+        // 씬1 영역
+        offX = dOff[0]; offY = dOff[1]; offZ = dOff[2]; scl = dScl;
+      } else if (localProgress < B + tw) {
+        // 전환 영역: lerp
+        const t = (localProgress - (B - tw)) / (2 * tw);
+        const st = t * t * (3 - 2 * t); // smoothstep
+        offX = dOff[0] + (oOff[0] - dOff[0]) * st;
+        offY = dOff[1] + (oOff[1] - dOff[1]) * st;
+        offZ = dOff[2] + (oOff[2] - dOff[2]) * st;
+        scl = dScl + (oScl - dScl) * st;
+      } else {
+        // 씬2 영역
+        offX = oOff[0]; offY = oOff[1]; offZ = oOff[2]; scl = oScl;
+      }
+
+      if (scl !== 1.0 || offX !== 0 || offY !== 0 || offZ !== 0) {
+        for (let i = 0; i < count; i++) {
+          const i3 = i * 3;
+          positions[i3] = positions[i3] * scl + offX;
+          positions[i3 + 1] = positions[i3 + 1] * scl + offY;
+          positions[i3 + 2] = positions[i3 + 2] * scl + offZ;
+        }
+        // centerBuf도 동일하게 변환 (라이팅 중심)
+        if (effectA === 'orbital2' || effectB === 'orbital2') {
+          for (let i = 0; i < count; i++) {
+            const i3 = i * 3;
+            centerBuf[i3] = centerBuf[i3] * scl + offX;
+            centerBuf[i3 + 1] = centerBuf[i3 + 1] * scl + offY;
+            centerBuf[i3 + 2] = centerBuf[i3 + 2] * scl + offZ;
+          }
+        }
       }
     }
 

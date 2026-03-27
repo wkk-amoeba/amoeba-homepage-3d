@@ -1,7 +1,7 @@
 import './style.css';
 import { SceneManager } from './scene/SceneManager';
 import { models } from './config/sceneConfig';
-import { registerUnifiedSphere } from './utils/sphereUnified';
+import { registerSphereDeform, registerSphereOrbital } from './utils/sphereUnified';
 
 // ─── 씬4 멀티 모델 설정 ───
 
@@ -115,9 +115,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (morpher) {
     await morpher.ready;
 
-    // 씬 01-02: Sphere
-    const sphereIdx = models.findIndex((m) => m.name === 'Sphere');
-    if (sphereIdx >= 0) registerUnifiedSphere(morpher, sphereIdx);
+    // 씬 01: SphereDeform (breathing/crumple)
+    const deformIdx = models.findIndex((m) => m.name === 'SphereDeform');
+    if (deformIdx >= 0) registerSphereDeform(morpher, deformIdx);
+
+    // 씬 02: SphereOrbital (위성 궤도)
+    const orbitalIdx = models.findIndex((m) => m.name === 'SphereOrbital');
+    if (orbitalIdx >= 0) registerSphereOrbital(morpher, orbitalIdx);
 
     // 씬 04: 개별 자전 shapeUpdater
     const model2Idx = models.findIndex((m) => m.name === 'Model2');
