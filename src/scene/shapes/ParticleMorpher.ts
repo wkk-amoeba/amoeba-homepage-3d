@@ -880,10 +880,14 @@ void main() {`
     // per-model disableParallax
     const disabled = scrollProgress !== undefined &&
       models[this.getCurrentShapeIdx(scrollProgress)]?.disableParallax === true;
-    const pStr = disabled ? 0 : particleConfig.parallaxStrength;
     if (mouseNorm && !disabled) {
+      const pStr = particleConfig.parallaxStrength;
       this.parallaxRotX += (-mouseNorm.y * pStr - this.parallaxRotX) * 0.05;
       this.parallaxRotY += (mouseNorm.x * pStr - this.parallaxRotY) * 0.05;
+    } else if (disabled) {
+      // disableParallax shape: 즉시 0 리셋 (감쇠하면 오프셋 파티클이 orbiting으로 보임)
+      this.parallaxRotX = 0;
+      this.parallaxRotY = 0;
     } else {
       this.parallaxRotX *= 0.95;
       this.parallaxRotY *= 0.95;
