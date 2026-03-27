@@ -1,16 +1,13 @@
 import GUI from 'lil-gui';
 import { SceneManager } from '../scene/SceneManager';
 import { particleConfig, backgroundConfig, animationPhases } from '../config/sceneConfig';
-import { getActiveUnifiedConfig } from '../utils/sphereUnified';
+
 
 const STORAGE_KEY = 'particle-debug-settings';
 
-interface LightingValues { ambient: number; diffuse: number; specular: number; shininess: number }
-
 interface SavedSettings {
   globalLighting: { dirX: number; dirY: number; dirZ: number; ambient: number; diffuse: number; specular: number; shininess: number };
-  scene1: { depthMin: number; depthMax: number; particleSize: number; deformLighting: LightingValues };
-  scene2?: { orbital2Lighting: LightingValues };
+  scene1: { depthMin: number; depthMax: number; particleSize: number };
   scene3: { shapeScale: number };
   shapeScales?: Record<string, number>;
 }
@@ -63,12 +60,9 @@ export class DebugPanel {
 
     // ── Production controls (always visible) ──
 
-    const sphereShape = shapeTargets.find(s => s.name === 'Sphere');
-    const unifiedCfgProd = getActiveUnifiedConfig();
+    const sphereShape = shapeTargets.find(s => s.name === 'SphereDeform');
     const gyroIdx = shapeTargets.findIndex(s => s.name === 'Gyro');
     const gyroShape = gyroIdx >= 0 ? shapeTargets[gyroIdx] : null;
-    const dl = unifiedCfgProd?.deformLighting;
-    const o2l = unifiedCfgProd?.orbital2Lighting;
 
     // Restore saved settings
     const saved = loadSettings();
@@ -99,20 +93,6 @@ export class DebugPanel {
         sphereShape.depthSize.max = s1.depthMax;
       }
       morpher.particleSize = s1.particleSize;
-      if (dl) {
-        dl.ambient = s1.deformLighting.ambient;
-        dl.diffuse = s1.deformLighting.diffuse;
-        dl.specular = s1.deformLighting.specular;
-        dl.shininess = s1.deformLighting.shininess;
-      }
-
-      // Scene 2
-      if (saved.scene2 && o2l) {
-        o2l.ambient = saved.scene2.orbital2Lighting.ambient;
-        o2l.diffuse = saved.scene2.orbital2Lighting.diffuse;
-        o2l.specular = saved.scene2.orbital2Lighting.specular;
-        o2l.shininess = saved.scene2.orbital2Lighting.shininess;
-      }
 
       // Scene 3
       if (gyroShape && gyroShape.configScale > 0) {
@@ -172,20 +152,6 @@ export class DebugPanel {
         depthMin: sphereShape?.depthSize?.min ?? 0.1,
         depthMax: sphereShape?.depthSize?.max ?? 0.7,
         particleSize: morpher.particleSize,
-        deformLighting: {
-          ambient: dl?.ambient ?? 0.1,
-          diffuse: dl?.diffuse ?? 2.0,
-          specular: dl?.specular ?? 2.0,
-          shininess: dl?.shininess ?? 1.0,
-        },
-      },
-      scene2: {
-        orbital2Lighting: {
-          ambient: o2l?.ambient ?? 0.2,
-          diffuse: o2l?.diffuse ?? 6.0,
-          specular: o2l?.specular ?? 1.0,
-          shininess: o2l?.shininess ?? 1.0,
-        },
       },
       scene3: { shapeScale: (gyroShape?.configScale ?? 1) * (gyroShape?.shapeScale ?? 1) },
       shapeScales: Object.fromEntries(shapeTargets.map(s => [s.name, s.configScale * s.shapeScale])),
@@ -208,30 +174,7 @@ export class DebugPanel {
         .name('Particle Size')
         .onChange((v: number) => { morpher.particleSize = v; });
 
-      if (dl) {
-        s1Folder.add(dl, 'ambient', 0, 1, 0.05).name('Ambient');
-        s1Folder.add(dl, 'diffuse', 0, 6, 0.1).name('Diffuse');
-        s1Folder.add(dl, 'specular', 0, 10, 0.1).name('Specular');
-        s1Folder.add(dl, 'shininess', 0, 20, 0.5).name('Shininess');
-      }
-
       if (isDev) {
-        const unifiedCfg = getActiveUnifiedConfig();
-        if (unifiedCfg) {
-          s1Folder.add(unifiedCfg, 'transitionWidth', 0, 0.3, 0.01).name('Transition Width');
-          s1Folder.add(unifiedCfg, 'boundary', 0.05, 0.8, 0.05).name('Boundary (Deform→위성)');
-          s1Folder.add(unifiedCfg, 'deformHoldScatter', 0, 0.1, 0.001).name('Scatter: Deform');
-
-          const deformFolder = s1Folder.addFolder('Deform');
-          const dc = unifiedCfg.deform;
-          deformFolder.add(dc, 'maxDeform', 0, 1.0, 0.01).name('Max Deform');
-          deformFolder.add(dc, 'noiseScale', 0.5, 8.0, 0.1).name('Noise Scale');
-          deformFolder.add(dc, 'breathSpeed', 0.05, 2.0, 0.05).name('Breath Speed');
-          deformFolder.add(dc, 'breathMin', 0, 1.0, 0.05).name('Breath Min');
-          deformFolder.add(dc, 'breathMax', 0, 1.0, 0.05).name('Breath Max');
-          deformFolder.add(dc, 'noiseSpeed', 0, 1.0, 0.01).name('Noise Speed');
-        }
-
         s1Folder.add(sphereShape, 'shapeScale', 0.3, 2.0, 0.05).name('Shape Scale');
 
         const posParams1 = { posX: sphereShape.worldOffset.x, posY: sphereShape.worldOffset.y, posZ: sphereShape.worldOffset.z };
@@ -244,40 +187,11 @@ export class DebugPanel {
       s1Folder.open();
     }
 
-    // 씬 2: 위성 (orbital2)
-    if (o2l) {
-      const s2Folder = this.gui.addFolder('씬 2');
-      s2Folder.add(o2l, 'ambient', 0, 1, 0.05).name('Ambient');
-      s2Folder.add(o2l, 'diffuse', 0, 6, 0.1).name('Diffuse');
-      s2Folder.add(o2l, 'specular', 0, 10, 0.1).name('Specular');
-      s2Folder.add(o2l, 'shininess', 0, 20, 0.5).name('Shininess');
-
-      if (isDev) {
-        const unifiedCfg = getActiveUnifiedConfig();
-        if (unifiedCfg) {
-          s2Folder.add(unifiedCfg, 'orbital2HoldScatter', 0, 0.1, 0.001).name('Scatter: 위성');
-
-          const o2Folder = s2Folder.addFolder('위성 (Linear Split)');
-          const o2 = unifiedCfg.orbital2;
-          o2Folder.add(o2, 'mainRadius', 0.5, 3.0, 0.05).name('Main Radius');
-          o2Folder.add(o2, 'bobAmplitude', 0, 1.0, 0.05).name('Bob Amplitude');
-          o2Folder.add(o2, 'bobSpeed', 0.1, 3.0, 0.1).name('Bob Speed');
-          o2Folder.add(o2, 'satelliteCount', 1, 8, 1).name('Satellites');
-          o2Folder.add(o2, 'satelliteRadius', 0.1, 1.5, 0.05).name('Sat Radius');
-          o2Folder.add(o2, 'travelDistance', 0.5, 5.0, 0.1).name('Travel Dist');
-          o2Folder.add(o2, 'travelSpeed', 0.1, 3.0, 0.1).name('Travel Speed');
-          o2Folder.add(o2, 'threshold', 0.5, 2.0, 0.05).name('Threshold');
-        }
-      }
-
-      s2Folder.open();
-    }
-
-    // 씬 3~N: Gyro 및 나머지 shape들 (씬 번호 = shapeIndex + 2)
+    // 씬 3~N: Gyro 및 나머지 shape들 (씬 번호 = shapeIndex + 1)
     shapeTargets.forEach((shape, index) => {
-      if (shape.name === 'Sphere') return; // 씬 1-2에서 이미 처리
+      if (shape.name.startsWith('Sphere')) return; // 씬 1-2에서 이미 처리
 
-      const sceneNum = index + 2; // Sphere(0)→씬1-2, Gyro(1)→씬3, Model2(2)→씬4 ...
+      const sceneNum = index + 1; // SphereDeform(0),SphereOrbital(1)→skip, Gyro(2)→씬3, Model2(3)→씬4 ...
       const folder = this.gui.addFolder(`씬 ${sceneNum}`);
 
       // Production + Dev 공통: scale (shapeUpdater shape은 자체 좌표계이므로 제외)

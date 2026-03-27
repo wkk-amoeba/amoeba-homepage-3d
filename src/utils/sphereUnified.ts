@@ -57,6 +57,7 @@ function computeMetaballLinearSplit(
   mainParticleRatio?: number,
   maxSatZ?: number,
   centerOutput?: Float32Array,
+  minSatZ?: number,
 ) {
   const satCount = Math.min(config.satelliteCount, 8);
   const mainR2 = config.mainRadius * config.mainRadius;
@@ -66,14 +67,15 @@ function computeMetaballLinearSplit(
   const mainCy = config.bobAmplitude * Math.sin(elapsed * config.bobSpeed);
   const mainCz = 0;
 
-  const satZLimit = maxSatZ ?? config.mainRadius;
+  const satZMax = maxSatZ ?? config.mainRadius;
+  const satZMin = minSatZ ?? -Infinity;
   for (let s = 0; s < satCount; s++) {
     const d = allDirs[s];
     const t = Math.sin(elapsed * config.travelSpeed * d.speedMul + d.phase);
     const dist = config.travelDistance * t;
     satCenters[s * 3] = mainCx + d.dir[0] * dist;
     satCenters[s * 3 + 1] = mainCy + d.dir[1] * dist;
-    satCenters[s * 3 + 2] = Math.min(mainCz + d.dir[2] * dist, satZLimit);
+    satCenters[s * 3 + 2] = Math.max(satZMin, Math.min(mainCz + d.dir[2] * dist, satZMax));
   }
 
   const mainFraction = mainParticleRatio ?? (mainR2 / (mainR2 + satCount * satR2));
@@ -179,39 +181,6 @@ function computeMetaballLinearSplit(
   }
 }
 
-// ─── Unified config (exposed for DebugPanel) ───
-
-export interface UnifiedSphereConfig {
-  deform: SphereDeformConfig;
-  orbital2: MetaballLinearConfig;  // 위성 직선 왕복 + 파티클 분할 (리퀴드 브릿지)
-  transitionWidth: number; // fraction of local progress for blending (0~0.5)
-  boundary: number; // deform → orbital2 경계 (0~1)
-  // Per-sub-effect holdScatter
-  deformHoldScatter: number;
-  orbital2HoldScatter: number;
-  // Per-sub-effect lighting override
-  deformLighting?: { ambient?: number; diffuse?: number; specular?: number; shininess?: number };
-  orbital2Lighting?: { ambient?: number; diffuse?: number; specular?: number; shininess?: number };
-  // 서브섹션별 파티클 수 (미지정 시 초기 activeCount 유지)
-  deformActiveCount?: number;
-  orbital2ActiveCount?: number;
-  // orbital2 메인/위성 파티클 비율 (0~1). 미지정 시 표면적 비례 자동 계산
-  orbital2MainParticleRatio?: number;
-  // 위성 최대 Z좌표 (카메라 방향 제한). 0=메인 중심까지, 음수=더 뒤로
-  orbital2MaxSatZ?: number;
-  // 서브섹션별 위치 오프셋 [x, y, z] (기본 [0,0,0])
-  deformOffset?: [number, number, number];
-  orbital2Offset?: [number, number, number];
-  // 서브섹션별 스케일 (기본 1.0, 전체 크기 배율)
-  deformScale?: number;
-  orbital2Scale?: number;
-}
-
-let activeUnifiedConfig: UnifiedSphereConfig | null = null;
-export function getActiveUnifiedConfig(): UnifiedSphereConfig | null {
-  return activeUnifiedConfig;
-}
-
 // ─── Morpher 타입 ───
 
 type MorpherAPI = {
@@ -270,7 +239,8 @@ export function registerSphereOrbital(morpher: MorpherAPI, shapeIdx: number) {
     travelDistance: 2.0, travelSpeed: 0.8, threshold: 1.05,
   };
   const mainParticleRatio = 0.80;
-  const maxSatZ = -1.0;
+  const maxSatZ = 0;
+  const minSatZ = -1.0;
   const allLinearDirs = makeLinearDirections(8);
   const satCenters = new Float64Array(8 * 3);
   const centerBuf = new Float32Array(count * 3);
@@ -278,266 +248,8 @@ export function registerSphereOrbital(morpher: MorpherAPI, shapeIdx: number) {
   let elapsed = 0;
   morpher.setShapeUpdater(shapeIdx, (delta: number) => {
     elapsed += delta;
-    computeMetaballLinearSplit(positions, count, normals, elapsed, orbitalConfig, allLinearDirs, satCenters, mainParticleRatio, maxSatZ, centerBuf);
+    computeMetaballLinearSplit(positions, count, normals, elapsed, orbitalConfig, allLinearDirs, satCenters, mainParticleRatio, maxSatZ, centerBuf, minSatZ);
     shape.particleCenters = centerBuf;
     shape.usePerParticleCenter = 1;
   });
-}
-
-// ─── 레거시: registerUnifiedSphere (하위 호환) ───
-
-export function registerUnifiedSphere(
-  morpher: MorpherAPI,
-  shapeIdx: number,
-): UnifiedSphereConfig | null {
-  const shapeTargets = morpher.getShapeTargets();
-  const shape = shapeTargets[shapeIdx];
-  if (!shape) {
-    console.warn(`registerUnifiedSphere: shape index ${shapeIdx} not found`);
-    return null;
-  }
-
-  const bounds = morpher.getSectionBounds(shapeIdx);
-  if (!bounds) {
-    console.warn(`registerUnifiedSphere: no section bounds for shape ${shapeIdx}`);
-    return null;
-  }
-
-  const config: UnifiedSphereConfig = {
-    deform: {
-      noiseScale: 3.4,
-      maxDeform: 0,
-      breathSpeed: 1.8,
-      breathMin: 0.7,
-      breathMax: 1.0,
-      noiseSpeed: 0.25,
-    },
-    orbital2: {
-      mainRadius: 1.00,
-      bobAmplitude: 0.75,
-      bobSpeed: 1.1,
-      satelliteCount: 5,
-      satelliteRadius: 0.2,
-      travelDistance: 2.0,
-      travelSpeed: 0.8,
-      threshold: 1.05,
-    },
-    transitionWidth: 0.1,
-    boundary: 0.35,       // deform → orbital2 경계
-    deformHoldScatter: 0,
-    orbital2HoldScatter: 0.001,
-    deformLighting:  { ambient: 0.1, diffuse: 2.0, specular: 2.0, shininess: 1.0 },
-    orbital2Lighting: { ambient: 0.2, diffuse: 6.0, specular: 1.0, shininess: 1.0 },
-    orbital2MainParticleRatio: 0.80,
-    orbital2MaxSatZ: -1.0,
-    // 서브섹션별 위치/크기 (씬1=deform, 씬2=orbital2)
-    deformOffset: [-2, 0, 0],
-    deformScale: 1.0,
-    orbital2Offset: [0, 0, 0],
-    orbital2Scale: 1.0,
-  };
-
-  const positions = shape.positions;
-  const initialActiveCount = shape.activeCount;
-  const maxCount = Math.max(
-    initialActiveCount,
-    config.deformActiveCount ?? 0,
-    config.orbital2ActiveCount ?? 0,
-  );
-
-  // Precompute shared state
-  const normals = new Float32Array(maxCount * 3);
-  const radii = new Float32Array(maxCount);
-  for (let i = 0; i < initialActiveCount; i++) {
-    const ox = positions[i * 3], oy = positions[i * 3 + 1], oz = positions[i * 3 + 2];
-    const r = Math.sqrt(ox * ox + oy * oy + oz * oz);
-    radii[i] = r;
-    if (r > 0.001) {
-      normals[i * 3] = ox / r;
-      normals[i * 3 + 1] = oy / r;
-      normals[i * 3 + 2] = oz / r;
-    }
-  }
-
-  // Scratch buffers for blending
-  const bufA = new Float32Array(maxCount * 3);
-  const bufB = new Float32Array(maxCount * 3);
-  // Per-particle center buffer for dynamic lighting (orbital2용)
-  const centerBuf = new Float32Array(maxCount * 3);
-
-  // Satellite data for linear reciprocation
-  const allLinearDirs = makeLinearDirections(8);
-  const satCenters2 = new Float64Array(8 * 3);
-
-  let elapsed = 0;
-
-  const sectionStart = bounds.start;
-  const sectionEnd = bounds.end;
-  const sectionLen = sectionEnd - sectionStart;
-
-  morpher.setShapeUpdater(shapeIdx, (delta: number, scrollProgress: number) => {
-    elapsed += delta;
-
-    const localProgress = Math.max(0, Math.min(1,
-      (scrollProgress - sectionStart) / sectionLen
-    ));
-
-    const tw = config.transitionWidth;
-    const B = config.boundary; // deform → orbital2 boundary
-
-    // 서브섹션별 동적 activeCount 결정
-    const getSubCount = (effect: string): number => {
-      if (effect === 'deform' && config.deformActiveCount) return config.deformActiveCount;
-      if (effect === 'orbital2' && config.orbital2ActiveCount) return config.orbital2ActiveCount;
-      return initialActiveCount;
-    };
-
-    // holdScatter
-    if (localProgress < B - tw) {
-      shape.holdScatter = config.deformHoldScatter;
-    } else if (localProgress < B + tw) {
-      const t = (localProgress - (B - tw)) / (2 * tw);
-      shape.holdScatter = config.deformHoldScatter * (1 - t) + config.orbital2HoldScatter * t;
-    } else {
-      shape.holdScatter = config.orbital2HoldScatter;
-    }
-
-    // Per-particle center 전환
-    if (localProgress < B - tw) {
-      shape.usePerParticleCenter = 0;
-    } else if (localProgress < B + tw) {
-      const t = (localProgress - (B - tw)) / (2 * tw);
-      shape.usePerParticleCenter = t * t * (3 - 2 * t); // smoothstep
-    } else {
-      shape.usePerParticleCenter = 1;
-    }
-
-    // Lighting
-    {
-      const dLt = config.deformLighting;
-      const o2Lt = config.orbital2Lighting;
-
-      if (dLt || o2Lt) {
-        const lerpVal = (a: number, b: number, t: number) => a + (b - a) * t;
-
-        let targetLt: { ambient: number; diffuse: number; specular: number; shininess: number };
-
-        if (localProgress < B - tw) {
-          targetLt = { ...dLt! } as typeof targetLt;
-        } else if (localProgress < B + tw) {
-          const t = (localProgress - (B - tw)) / (2 * tw);
-          targetLt = {
-            ambient: lerpVal(dLt!.ambient!, o2Lt!.ambient!, t),
-            diffuse: lerpVal(dLt!.diffuse!, o2Lt!.diffuse!, t),
-            specular: lerpVal(dLt!.specular!, o2Lt!.specular!, t),
-            shininess: lerpVal(dLt!.shininess!, o2Lt!.shininess!, t),
-          };
-        } else {
-          targetLt = { ...o2Lt! } as typeof targetLt;
-        }
-
-        shape.lighting = targetLt;
-      }
-    }
-
-    // Determine active effect(s) and blend factor
-    let effectA: 'deform' | 'orbital2';
-    let effectB: 'deform' | 'orbital2' | null = null;
-    let blendT = 0;
-
-    if (localProgress < B - tw) {
-      effectA = 'deform';
-    } else if (localProgress < B + tw) {
-      effectA = 'deform';
-      effectB = 'orbital2';
-      blendT = (localProgress - (B - tw)) / (2 * tw);
-    } else {
-      effectA = 'orbital2';
-    }
-
-    // Smoothstep the blend
-    blendT = Math.max(0, Math.min(1, blendT));
-    blendT = blendT * blendT * (3 - 2 * blendT);
-
-    // 동적 activeCount
-    let targetActiveCount = getSubCount(effectA);
-    if (effectB) {
-      const toCount = getSubCount(effectB);
-      targetActiveCount = Math.round(targetActiveCount + (toCount - targetActiveCount) * blendT);
-    }
-    shape.activeCount = targetActiveCount;
-    const count = targetActiveCount;
-
-    // Compute effect A
-    const outA = effectB ? bufA : positions;
-    switch (effectA) {
-      case 'deform':
-        computeDeform(outA, count, normals, radii, elapsed, config.deform);
-        break;
-      case 'orbital2':
-        computeMetaballLinearSplit(outA, count, normals, elapsed, config.orbital2, allLinearDirs, satCenters2, config.orbital2MainParticleRatio, config.orbital2MaxSatZ, centerBuf);
-        break;
-    }
-
-    // Compute effect B and blend
-    if (effectB) {
-      computeMetaballLinearSplit(bufB, count, normals, elapsed, config.orbital2, allLinearDirs, satCenters2, config.orbital2MainParticleRatio, config.orbital2MaxSatZ, centerBuf);
-
-      const invT = 1 - blendT;
-      for (let i = 0; i < count * 3; i++) {
-        positions[i] = bufA[i] * invT + bufB[i] * blendT;
-      }
-    }
-
-    // 서브섹션별 offset/scale 적용
-    {
-      const dOff = config.deformOffset ?? [0, 0, 0];
-      const dScl = config.deformScale ?? 1.0;
-      const oOff = config.orbital2Offset ?? [0, 0, 0];
-      const oScl = config.orbital2Scale ?? 1.0;
-
-      let offX: number, offY: number, offZ: number, scl: number;
-      if (localProgress < B - tw) {
-        // 씬1 영역
-        offX = dOff[0]; offY = dOff[1]; offZ = dOff[2]; scl = dScl;
-      } else if (localProgress < B + tw) {
-        // 전환 영역: lerp
-        const t = (localProgress - (B - tw)) / (2 * tw);
-        const st = t * t * (3 - 2 * t); // smoothstep
-        offX = dOff[0] + (oOff[0] - dOff[0]) * st;
-        offY = dOff[1] + (oOff[1] - dOff[1]) * st;
-        offZ = dOff[2] + (oOff[2] - dOff[2]) * st;
-        scl = dScl + (oScl - dScl) * st;
-      } else {
-        // 씬2 영역
-        offX = oOff[0]; offY = oOff[1]; offZ = oOff[2]; scl = oScl;
-      }
-
-      if (scl !== 1.0 || offX !== 0 || offY !== 0 || offZ !== 0) {
-        for (let i = 0; i < count; i++) {
-          const i3 = i * 3;
-          positions[i3] = positions[i3] * scl + offX;
-          positions[i3 + 1] = positions[i3 + 1] * scl + offY;
-          positions[i3 + 2] = positions[i3 + 2] * scl + offZ;
-        }
-        // centerBuf도 동일하게 변환 (라이팅 중심)
-        if (effectA === 'orbital2' || effectB === 'orbital2') {
-          for (let i = 0; i < count; i++) {
-            const i3 = i * 3;
-            centerBuf[i3] = centerBuf[i3] * scl + offX;
-            centerBuf[i3 + 1] = centerBuf[i3 + 1] * scl + offY;
-            centerBuf[i3 + 2] = centerBuf[i3 + 2] * scl + offZ;
-          }
-        }
-      }
-    }
-
-    // Per-particle center를 shape에 전달 (orbital2 활성 시)
-    if (effectA === 'orbital2' || effectB === 'orbital2') {
-      shape.particleCenters = centerBuf;
-    }
-  });
-
-  activeUnifiedConfig = config;
-  return config;
 }

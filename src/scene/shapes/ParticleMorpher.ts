@@ -745,8 +745,7 @@ void main() {`
       if (local < enterRatio && i > 0) {
         // Enter phase = second half of transition from previous shape
         const t = local / enterRatio;
-        const eased = this.easeOutQuad(t);
-        return { type: 'transition', fromIdx: i - 1, toIdx: i, t: 0.5 + eased * 0.5 };
+        return { type: 'transition', fromIdx: i - 1, toIdx: i, t: 0.5 + t * 0.5 };
       }
 
       if (local < enterRatio + holdRatio) {
@@ -758,8 +757,7 @@ void main() {`
       const exitT = (local - enterRatio - holdRatio) / (1 - enterRatio - holdRatio);
       if (i < modelCount - 1) {
         // First half of transition to next shape
-        const eased = this.easeInQuad(exitT);
-        return { type: 'transition', fromIdx: i, toIdx: i + 1, t: eased * 0.5 };
+        return { type: 'transition', fromIdx: i, toIdx: i + 1, t: exitT * 0.5 };
       } else {
         // Last model: stay in hold (no next shape)
         return { type: 'hold', shapeIdx: i };

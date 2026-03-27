@@ -161,9 +161,9 @@ export const scrollConfig = {
 
 // 애니메이션 페이즈 설정 (진입 → 고정 → 퇴장)
 export const animationPhases = {
-  enterRatio: 0.3,   // 진입: 30%
-  holdRatio: 0.4,    // 고정: 40%  microNoiseAmp: 0.1를 키우면 원하는 형태에 가까운
-  exitRatio: 0.3,    // 퇴장: 30%
+  enterRatio: 0.38,   // 진입:0.43 30%
+  holdRatio: 0.16,    // 고정: 0.04 40%  microNoiseAmp: 0.1를 키우면 원하는 형태에 가까운
+  exitRatio: 0.38,    // 퇴장: 30%
 };
 
 // 인트로 애니메이션 설정 (페이지 로드 시 파티클이 모여서 첫 오브젝트 형성)
