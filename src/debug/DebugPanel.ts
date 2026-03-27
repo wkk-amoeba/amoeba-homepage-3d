@@ -8,7 +8,6 @@ const STORAGE_KEY = 'particle-debug-settings';
 interface SavedSettings {
   globalLighting: { dirX: number; dirY: number; dirZ: number; ambient: number; diffuse: number; specular: number; shininess: number };
   scene1: { depthMin: number; depthMax: number; particleSize: number };
-  scene3: { shapeScale: number };
   shapeScales?: Record<string, number>;
 }
 
@@ -61,8 +60,6 @@ export class DebugPanel {
     // ── Production controls (always visible) ──
 
     const sphereShape = shapeTargets.find(s => s.name === 'SphereDeform');
-    const gyroIdx = shapeTargets.findIndex(s => s.name === 'Gyro');
-    const gyroShape = gyroIdx >= 0 ? shapeTargets[gyroIdx] : null;
 
     // Restore saved settings
     const saved = loadSettings();
@@ -93,11 +90,6 @@ export class DebugPanel {
         sphereShape.depthSize.max = s1.depthMax;
       }
       morpher.particleSize = s1.particleSize;
-
-      // Scene 3
-      if (gyroShape && gyroShape.configScale > 0) {
-        gyroShape.shapeScale = saved.scene3.shapeScale / gyroShape.configScale;
-      }
 
       // All shape scales (저장값 = configScale * shapeScale → shapeScale 복원)
       if (saved.shapeScales) {
@@ -153,7 +145,6 @@ export class DebugPanel {
         depthMax: sphereShape?.depthSize?.max ?? 0.7,
         particleSize: morpher.particleSize,
       },
-      scene3: { shapeScale: (gyroShape?.configScale ?? 1) * (gyroShape?.shapeScale ?? 1) },
       shapeScales: Object.fromEntries(shapeTargets.map(s => [s.name, s.configScale * s.shapeScale])),
     });
 
@@ -187,11 +178,11 @@ export class DebugPanel {
       s1Folder.open();
     }
 
-    // 씬 3~N: Gyro 및 나머지 shape들 (씬 번호 = shapeIndex + 1)
+    // 씬 3~N: 나머지 shape들 (씬 번호 = shapeIndex + 1)
     shapeTargets.forEach((shape, index) => {
       if (shape.name.startsWith('Sphere')) return; // 씬 1-2에서 이미 처리
 
-      const sceneNum = index + 1; // SphereDeform(0),SphereOrbital(1)→skip, Gyro(2)→씬3, Model2(3)→씬4 ...
+      const sceneNum = index + 1; // SphereDeform(0),SphereOrbital(1)→skip, Model2(2)→씬3, Circle(3)→씬4 ...
       const folder = this.gui.addFolder(`씬 ${sceneNum}`);
 
       // Production + Dev 공통: scale (shapeUpdater shape은 자체 좌표계이므로 제외)

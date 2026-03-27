@@ -71,28 +71,24 @@ export interface ModelData {
 
 // 3D 모델 정의
 // ┌─────────────────────────────────────────────────────────────────────────┐
-// │ ⚠️ 총 씬 6개, models[] 배열은 5개. Sphere가 씬 2개(01, 02)를 차지!   │
-// │ 씬 번호 ≠ models[] 인덱스. 씬 01-02는 models[0] 하나를 공유           │
+// │ 총 씬 6개, models[] 배열 6개                                           │
 // │                                                                         │
 // │ 씬 01 (원/Sphere)      → models[0] — 프로그래밍 (sphereUnified.ts)     │
-// │ 씬 02 (위성/Satellite) → models[0] — 같은 shape의 서브섹션             │
-// │ 씬 03 (Gyro)           → models[1] — 3D 파일 (GLB)                     │
-// │ 씬 04 (Model2)         → models[2] — 3D 파일 (GLB)                     │
-// │ 씬 05 (Circle)         → models[3] — 3D 파일 (GLB)                     │
-// │ 씬 06 (LineSphere4)    → models[4] — 3D 파일 (GLB)                     │
+// │ 씬 02 (위성/Satellite) → models[1] — 프로그래밍 (sphereUnified.ts)     │
+// │ 씬 03 (Gyro)           → models[2] — 3D 파일 (GLB)                     │
+// │ 씬 04 (Model2)         → models[3] — 3D 파일 (GLB)                     │
+// │ 씬 05 (Circle)         → models[4] — 3D 파일 (GLB)                     │
+// │ 씬 06 (LineSphere4)    → models[5] — 3D 파일 (GLB)                     │
 // │                                                                         │
 // │ particleCount: 모델별 파티클 수 (미지정 시 .bin 버텍스 수 사용)         │
-// │ 씬 01-02 서브섹션별 파티클 수는 sphereUnified.ts config에서 설정:       │
-// │   deformActiveCount / orbitalActiveCount / orbital2ActiveCount          │
 // └─────────────────────────────────────────────────────────────────────────┘
 export const models: ModelData[] = [
   // 씬 01: SphereDeform — breathing/crumple 효과 (sphereDeformUpdater)
-  { id: 0, name: 'SphereDeform', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [0, 0, 0], holdScatter: 0.001, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.1, diffuse: 2.0, specular: 2.0, shininess: 1.0 } },
+  { id: 0, name: 'SphereDeform', modelPath: '/models/high_shpere.glb', scale: 0.4, position: [2, 0, 0], holdScatter: 0.001, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.1, diffuse: 2.0, specular: 2.0, shininess: 1.0 } },
   // 씬 02: SphereOrbital — 위성 궤도 효과 (sphereOrbitalUpdater)
-  { id: 1, name: 'SphereOrbital', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [0, 0, 0], holdScatter: 0.001, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.2, diffuse: 6.0, specular: 1.0, shininess: 1.0 } },
+  { id: 1, name: 'SphereOrbital', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [-2, 0, 0], holdScatter: 0.001, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.2, diffuse: 6.0, specular: 1.0, shininess: 1.0 } },
   // 씬 03: Gyro
-  { id: 2, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.45, position: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, radialSize: { min: 0.5, max: 0.6 }, spinTop: { tilt: -0.3, spinSpeed: 0, precessionSpeed: 0, nutationAmp: 0, nutationSpeed: 0, pivotY: -4 }, enterTransition: { noRotation: false, scatterScale: 0.03 }, lighting: { ambient: 0.1, diffuse: 1.0, specular: 6.0, shininess: 3.0 } },
-  //{ id: 2, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.45, position: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, radialSize: { min: 0.5, max: 0.6 }, spinTop: { tilt: 0, spinSpeed: 0.3, precessionSpeed: 0.4, nutationAmp: 0.3491, nutationSpeed: 1.5, pivotY: -4 }, enterTransition: { noRotation: false, scatterScale: 0.03 }, lighting: { ambient: 0.1, diffuse: 1.0, specular: 6.0, shininess: 3.0 } },
+  { id: 2, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.45, position: [1, 0, 0], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.3, max: 0.8 }, spinTop: { tilt: -0.3, spinSpeed: 0, precessionSpeed: 0, nutationAmp: 0, nutationSpeed: 0, pivotY: 0 } },
   // 씬 04: Model2 + Cone + Cube 개별 회전 (main.ts의 shapeUpdater 등록)
   { id: 3, name: 'Model2', modelPath: '/models/2.glb', scale: 0.35, particleCount: 15000, position: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, autoRotateSpeed: 0, depthSize: { min: 0.25, max: 0.8 }, lighting: { ambient: 0.2, diffuse: 1.0, specular: 1.0, shininess: 2.0 } },
   // 씬 05: Circle
