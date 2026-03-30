@@ -66,8 +66,8 @@ class ScrollManager {
 
     // Update shape section text with fade in/out
     const sections = document.querySelectorAll('.shape-section');
-    const fadeInRatio = 0.15;
-    const fadeOutRatio = 0.15;
+    const fadeInRatio = 0.3; //0.15
+    const fadeOutRatio = 0.3; //0.15
 
     if (this.introComplete && this.introTextOpacity < 1) {
       this.introTextOpacity = Math.min(1, this.introTextOpacity + 0.02);
