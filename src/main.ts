@@ -99,9 +99,9 @@ async function loadSubModels(entries: SubModelEntry[]) {
 document.addEventListener('DOMContentLoaded', async () => {
   // 씬 04: 멀티 모델 설정
   const scene4Entries: SubModelEntry[] = [
-    { binPath: '/models/vertices/2.bin', offset: [0, 1.2, 0], tilt: [0, 0.5, 0.5], particleCount: 5000, scale: 2, spinSpeed: 0.3, spinAxis: [0, 1, 0] },
-    { binPath: '/models/vertices/Cone.bin', offset: [-1.2, -1.0, 0], tilt: [0.2, 0.5, 0], particleCount: 5000, scale: 1.2, spinSpeed: -0.5, spinAxis: [0.3, 0, 0.3] },
-    { binPath: '/models/vertices/Cube.bin', offset: [1.3, -1.0, 0], tilt: [0, 0.5, 1], particleCount: 5000, scale: 1.2, spinSpeed: 0.4, spinAxis: [0.2, 0.3, 0.3] },
+    { binPath: '/models/vertices/2.bin', offset: [0, 2.0, -0.2], tilt: [0, 0.5, 0.5], particleCount: 5000, scale: 1.6, spinSpeed: 0.3, spinAxis: [0, 1, 0] },
+    { binPath: '/models/vertices/Cone.bin', offset: [-2.2, -1.0, -0.4], tilt: [0.2, 0.5, 0], particleCount: 5000, scale: 1.0, spinSpeed: -0.5, spinAxis: [0.3, 0, 0.3] },
+    { binPath: '/models/vertices/Cube.bin', offset: [2.4, -1.6, 0], tilt: [0, 0.5, 1], particleCount: 5000, scale: 1.2, spinSpeed: 0.4, spinAxis: [0.2, 0.3, 0.3] },
   ];
 
   const { combined, subs } = await loadSubModels(scene4Entries);

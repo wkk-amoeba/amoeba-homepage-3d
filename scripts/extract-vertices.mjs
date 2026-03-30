@@ -31,7 +31,6 @@ const MODELS = [
   { name: 'Cone', file: 'Cone.glb' },
   { name: 'Cube', file: 'Cube.glb' },
   { name: 'model_2', file: '2.glb' },
-  { name: 'circle_1', file: '0324_circle_1.glb' },
   { name: '0325_line-sphere_4', file: '0325_line-sphere_4.glb' },
 ];
 
