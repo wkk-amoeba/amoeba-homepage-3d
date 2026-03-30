@@ -84,9 +84,9 @@ export interface ModelData {
 // └─────────────────────────────────────────────────────────────────────────┘
 export const models: ModelData[] = [
   // 씬 01: SphereDeform — breathing/crumple 효과 (sphereDeformUpdater)
-  { id: 0, name: 'SphereDeform', modelPath: '/models/high_shpere.glb', scale: 0.4, position: [2, 0, 0], holdScatter: 0.001, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.1, diffuse: 2.0, specular: 2.0, shininess: 1.0 } },
+  { id: 0, name: 'SphereDeform', modelPath: '/models/high_shpere.glb', scale: 0.45, position: [1.5, 0, 0], holdScatter: 0.001, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.1, diffuse: 2.0, specular: 2.0, shininess: 1.0 } },
   // 씬 02: SphereOrbital — 위성 궤도 효과 (sphereOrbitalUpdater)
-  { id: 1, name: 'SphereOrbital', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [-2, 0, 0], holdScatter: 0.001, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.2, diffuse: 6.0, specular: 1.0, shininess: 1.0 } },
+  { id: 1, name: 'SphereOrbital', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [-1, 0, 0], holdScatter: 0.001, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.2, diffuse: 6.0, specular: 1.0, shininess: 1.0 } },
   // 씬 03: Gyro
   { id: 2, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.45, position: [1, 0, 0], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.3, max: 0.8 }, spinTop: { tilt: -0.3, spinSpeed: 0, precessionSpeed: 0, nutationAmp: 0, nutationSpeed: 0, pivotY: 0 } },
   // 씬 04: Model2 + Cone + Cube 개별 회전 (main.ts의 shapeUpdater 등록)
