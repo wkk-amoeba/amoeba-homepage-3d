@@ -180,7 +180,7 @@ export class DebugPanel {
     shapeTargets.forEach((shape, index) => {
       if (shape.name.startsWith('Sphere')) return; // 씬 1-2에서 이미 처리
 
-      const sceneNum = index + 1; // SphereDeform(0),SphereOrbital(1)→skip, Model2(2)→씬3, Circle(3)→씬4 ...
+      const sceneNum = index + 1; // SphereDeform(0),SphereOrbital(1)→skip, Gyro(2)→씬3, Model2(3)→씬4, LineSphere4(4)→씬5
       const folder = this.gui.addFolder(`씬 ${sceneNum}`);
 
       // Production + Dev 공통: scale (shapeUpdater shape은 자체 좌표계이므로 제외)

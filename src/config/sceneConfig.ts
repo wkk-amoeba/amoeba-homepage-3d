@@ -71,30 +71,27 @@ export interface ModelData {
 
 // 3D 모델 정의
 // ┌─────────────────────────────────────────────────────────────────────────┐
-// │ 총 씬 6개, models[] 배열 6개                                           │
+// │ 총 씬 5개, models[] 배열 5개                                           │
 // │                                                                         │
 // │ 씬 01 (원/Sphere)      → models[0] — 프로그래밍 (sphereUnified.ts)     │
 // │ 씬 02 (위성/Satellite) → models[1] — 프로그래밍 (sphereUnified.ts)     │
 // │ 씬 03 (Gyro)           → models[2] — 3D 파일 (GLB)                     │
 // │ 씬 04 (Model2)         → models[3] — 3D 파일 (GLB)                     │
-// │ 씬 05 (Circle)         → models[4] — 3D 파일 (GLB)                     │
-// │ 씬 06 (LineSphere4)    → models[5] — 3D 파일 (GLB)                     │
+// │ 씬 05 (LineSphere4)    → models[4] — 3D 파일 (GLB)                     │
 // │                                                                         │
 // │ particleCount: 모델별 파티클 수 (미지정 시 .bin 버텍스 수 사용)         │
 // └─────────────────────────────────────────────────────────────────────────┘
 export const models: ModelData[] = [
   // 씬 01: SphereDeform — breathing/crumple 효과 (sphereDeformUpdater)
-  { id: 0, name: 'SphereDeform', modelPath: '/models/high_shpere.glb', scale: 0.45, position: [1.5, 0, 0], holdScatter: 0.001, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.1, diffuse: 2.0, specular: 2.0, shininess: 1.0 } },
+  { id: 0, name: 'SphereDeform', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [0, 0, 0], holdScatter: 0.001, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.1, diffuse: 2.0, specular: 2.0, shininess: 1.0 } },
   // 씬 02: SphereOrbital — 위성 궤도 효과 (sphereOrbitalUpdater)
-  { id: 1, name: 'SphereOrbital', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [-1, 0, 0], holdScatter: 0.001, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.2, diffuse: 6.0, specular: 1.0, shininess: 1.0 } },
+  { id: 1, name: 'SphereOrbital', modelPath: '/models/high_shpere.glb', scale: 0.36, position: [+1, 0, 0], holdScatter: 0.001, sectionSpan: 1, depthSize: { min: 0.1, max: 0.8 }, lighting: { ambient: 0.2, diffuse: 6.0, specular: 1.0, shininess: 1.0 } },
   // 씬 03: Gyro
-  { id: 2, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.45, position: [1, 0, 0], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.3, max: 0.8 }, spinTop: { tilt: -0.3, spinSpeed: 0, precessionSpeed: 0, nutationAmp: 0, nutationSpeed: 0, pivotY: 0 } },
+  { id: 2, name: 'Gyro', modelPath: '/models/inception_gyro.glb', scale: 0.45, position: [-0.5, 0, 0], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.3, max: 0.8 }, spinTop: { tilt: -0.3, spinSpeed: 0, precessionSpeed: 0, nutationAmp: 0, nutationSpeed: 0, pivotY: 0 } },
   // 씬 04: Model2 + Cone + Cube 개별 회전 (main.ts의 shapeUpdater 등록)
   { id: 3, name: 'Model2', modelPath: '/models/2.glb', scale: 0.35, particleCount: 15000, position: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, autoRotateSpeed: 0, depthSize: { min: 0.25, max: 0.8 }, lighting: { ambient: 0.2, diffuse: 1.0, specular: 1.0, shininess: 2.0 } },
-  // 씬 05: Circle
-  { id: 4, name: 'Circle', modelPath: '/models/0324_circle_1.glb', scale: 0.35, position: [0, 0, 0], rotation: [0, 0, 0.1], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.35, max: 0.8 }, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 } },
-  // 씬 06: LineSphere4 — spinTop으로 틸트된 축 기준 자전 (precession/nutation 없음)
-  { id: 5, name: 'LineSphere4', modelPath: '/models/0325_line-sphere_4.glb', scale: 0.35, position: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.45, max: 0.8 }, spinTop: { tilt: 0.2618, spinSpeed: 0.15, precessionSpeed: 0, nutationAmp: 0, nutationSpeed: 0, pivotY: 0 }, autoRotateSpeed: 0, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 } },
+  // 씬 05: LineSphere4 — spinTop으로 틸트된 축 기준 자전 (precession/nutation 없음)
+  { id: 4, name: 'LineSphere4', modelPath: '/models/0325_line-sphere_4.glb', scale: 0.35, position: [0, 0, 0], holdScatter: 0.00, sectionSpan: 1, depthSize: { min: 0.45, max: 0.8 }, spinTop: { tilt: 0.2618, spinSpeed: 0.15, precessionSpeed: 0, nutationAmp: 0, nutationSpeed: 0, pivotY: 0 }, autoRotateSpeed: 0, lighting: { ambient: 0.1, diffuse: 1.0, specular: 1.0, shininess: 2.0 } },
 ];
 
 // 파티클 렌더링 모드
@@ -152,14 +149,14 @@ export const scrollConfig = {
   sectionGap: 1 / totalSpan,       // per span unit
   sectionDuration: 1 / totalSpan,  // per span unit
   previewOffset: 0,        // 프리뷰 없음
-  modelCount: 6,           // 총 span 합계 (deprecated — getPhase에서 span 누적 사용)
+  modelCount: 5,           // 총 span 합계 (deprecated — getPhase에서 span 누적 사용)
 };
 
 // 애니메이션 페이즈 설정 (진입 → 고정 → 퇴장)
 export const animationPhases = {
-  enterRatio: 0.38,   // 진입:0.43 30%
-  holdRatio: 0.18,    // 고정: 0.04 40%  microNoiseAmp: 0.1를 키우면 원하는 형태에 가까운
-  exitRatio: 0.44,    // 퇴장: 30%
+  enterRatio: 0.3,   // 0.38 진입:0.43 30%
+  holdRatio: 0.4,    // 0.18 고정: 0.04 40%  microNoiseAmp: 0.1를 키우면 원하는 형태에 가까운
+  exitRatio: 0.3,    // 0.44 퇴장: 30%
 };
 
 // 인트로 애니메이션 설정 (페이지 로드 시 파티클이 모여서 첫 오브젝트 형성)
