@@ -66,8 +66,9 @@ class ScrollManager {
 
     // Update shape section text with fade in/out
     const sections = document.querySelectorAll('.shape-section');
-    const fadeInRatio = 0.3; //0.15
-    const fadeOutRatio = 0.3; //0.15
+    const fadeInRatio = 0.3;
+    const fadeOutRatio = 0.3;
+    const blankRatio = 0.15;  // 씬 사이 텍스트 없는 대기 구간 (앞뒤 각각)
 
     if (this.introComplete && this.introTextOpacity < 1) {
       this.introTextOpacity = Math.min(1, this.introTextOpacity + 0.02);
@@ -121,10 +122,20 @@ class ScrollManager {
             }
           }
 
-          if (index > 0 && local < fadeInRatio) {
-            subOpacity *= local / fadeInRatio;
-          } else if (index < sections.length - 1 && local > 1 - fadeOutRatio) {
-            subOpacity *= 1 - (local - (1 - fadeOutRatio)) / fadeOutRatio;
+          const isFirstSub = index === 0;
+          const isLastSub = index === sections.length - 1;
+          const bInSub = isFirstSub ? 0 : blankRatio;
+          const bOutSub = isLastSub ? 0 : blankRatio;
+          const fOutSub = isLastSub ? 0 : fadeOutRatio;
+
+          if (local < bInSub) {
+            subOpacity = 0;
+          } else if (local < bInSub + fadeInRatio) {
+            subOpacity *= (local - bInSub) / fadeInRatio;
+          } else if (bOutSub > 0 && local > 1 - bOutSub) {
+            subOpacity = 0;
+          } else if (fOutSub > 0 && local > 1 - bOutSub - fOutSub) {
+            subOpacity *= 1 - (local - (1 - bOutSub - fOutSub)) / fOutSub;
           }
 
           if (index === 0) {
@@ -137,10 +148,21 @@ class ScrollManager {
         const content = contents[0];
         let opacity = 1;
 
-        if (index > 0 && local < fadeInRatio) {
-          opacity = local / fadeInRatio;
-        } else if (index < sections.length - 1 && local > 1 - fadeOutRatio) {
-          opacity = 1 - (local - (1 - fadeOutRatio)) / fadeOutRatio;
+        const isFirst = index === 0;
+        const isLast = index === sections.length - 1;
+        const bIn = isFirst ? 0 : blankRatio;       // 씬1: 앞 blank 없음
+        const fIn = isFirst ? 0 : fadeInRatio;       // 씬1: fade in은 introTextOpacity가 담당
+        const bOut = isLast ? 0 : blankRatio;        // 마지막 씬: 뒤 blank 없음
+        const fOut = isLast ? 0 : fadeOutRatio;       // 마지막 씬: fade out 없음
+
+        if (local < bIn) {
+          opacity = 0;
+        } else if (fIn > 0 && local < bIn + fIn) {
+          opacity = (local - bIn) / fIn;
+        } else if (bOut > 0 && local > 1 - bOut) {
+          opacity = 0;
+        } else if (fOut > 0 && local > 1 - bOut - fOut) {
+          opacity = 1 - (local - (1 - bOut - fOut)) / fOut;
         }
 
         if (index === 0) {
