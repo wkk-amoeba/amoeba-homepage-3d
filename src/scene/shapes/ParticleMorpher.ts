@@ -745,8 +745,7 @@ void main() {`
       if (local < enterRatio && i > 0) {
         // Enter phase = second half of transition from previous shape
         const t = local / enterRatio;
-        const eased = this.easeOutQuad(t);
-        return { type: 'transition', fromIdx: i - 1, toIdx: i, t: 0.5 + eased * 0.5 };
+        return { type: 'transition', fromIdx: i - 1, toIdx: i, t: 0.5 + t * 0.5 };
       }
 
       if (local < enterRatio + holdRatio) {
@@ -758,8 +757,7 @@ void main() {`
       const exitT = (local - enterRatio - holdRatio) / (1 - enterRatio - holdRatio);
       if (i < modelCount - 1) {
         // First half of transition to next shape
-        const eased = this.easeInQuad(exitT);
-        return { type: 'transition', fromIdx: i, toIdx: i + 1, t: eased * 0.5 };
+        return { type: 'transition', fromIdx: i, toIdx: i + 1, t: exitT * 0.5 };
       } else {
         // Last model: stay in hold (no next shape)
         return { type: 'hold', shapeIdx: i };
@@ -770,14 +768,6 @@ void main() {`
     const sectionStart = this.sectionBounds[0]?.start ?? 0;
     if (scrollProgress <= sectionStart) return { type: 'hold', shapeIdx: 0 };
     return { type: 'hold', shapeIdx: modelCount - 1 };
-  }
-
-  private easeOutQuad(t: number): number {
-    return 1 - (1 - t) * (1 - t);
-  }
-
-  private easeInQuad(t: number): number {
-    return t * t;
   }
 
   private smoothstep(t: number): number {
@@ -880,10 +870,14 @@ void main() {`
     // per-model disableParallax
     const disabled = scrollProgress !== undefined &&
       models[this.getCurrentShapeIdx(scrollProgress)]?.disableParallax === true;
-    const pStr = disabled ? 0 : particleConfig.parallaxStrength;
     if (mouseNorm && !disabled) {
+      const pStr = particleConfig.parallaxStrength;
       this.parallaxRotX += (-mouseNorm.y * pStr - this.parallaxRotX) * 0.05;
       this.parallaxRotY += (mouseNorm.x * pStr - this.parallaxRotY) * 0.05;
+    } else if (disabled) {
+      // disableParallax shape: 즉시 0 리셋 (감쇠하면 오프셋 파티클이 orbiting으로 보임)
+      this.parallaxRotX = 0;
+      this.parallaxRotY = 0;
     } else {
       this.parallaxRotX *= 0.95;
       this.parallaxRotY *= 0.95;
@@ -1155,23 +1149,18 @@ void main() {`
         m.m22 = -sp * ct * ss + cp * cs;
       }
     } else if (phase.type === 'transition') {
-      const fromSt = this.shapeTargets[phase.fromIdx].spinTop;
-      const toSt = this.shapeTargets[phase.toIdx].spinTop;
-      // Determine which spinTop config is active and blend direction
-      const activeSt = toSt || fromSt;
+      // transition 중에도 활성 spinTop shape의 full rotation 적용 (블렌딩 없음)
+      const activeSt = this.shapeTargets[phase.toIdx].spinTop || this.shapeTargets[phase.fromIdx].spinTop;
       if (activeSt) {
-        const activeIdx = toSt ? phase.toIdx : phase.fromIdx;
+        const activeIdx = this.shapeTargets[phase.toIdx].spinTop ? phase.toIdx : phase.fromIdx;
         m.shapeIdx = activeIdx;
         m.pivotY = activeSt.pivotY;
-        // toSt: identity → spinTop (blendT = phase.t)
-        // fromSt only: spinTop → identity (blendT = 1 - phase.t)
-        const blendT = toSt ? phase.t : (1 - phase.t);
-        const tilt = (activeSt.tilt + (activeSt.nutationAmp > 0 ? Math.sin(this.precessionAngles[activeIdx] * activeSt.nutationSpeed / activeSt.precessionSpeed) * activeSt.nutationAmp : 0)) * blendT;
+        const tilt = activeSt.tilt + (activeSt.nutationAmp > 0 ? Math.sin(this.precessionAngles[activeIdx] * activeSt.nutationSpeed / activeSt.precessionSpeed) * activeSt.nutationAmp : 0);
         const spinA = this.spinAngles[activeIdx];
         const precA = this.precessionAngles[activeIdx];
-        const cp = Math.cos(precA * blendT), sp = Math.sin(precA * blendT);
+        const cp = Math.cos(precA), sp = Math.sin(precA);
         const ct = Math.cos(tilt), st2 = Math.sin(tilt);
-        const cs = Math.cos(spinA * blendT), ss = Math.sin(spinA * blendT);
+        const cs = Math.cos(spinA), ss = Math.sin(spinA);
         m.m00 = cp * ct * cs - sp * ss;
         m.m01 = -cp * st2;
         m.m02 = cp * ct * ss + sp * cs;
@@ -1307,7 +1296,7 @@ void main() {`
     // Transition phase
     const from = this.shapeTargets[phase.fromIdx];
     const to = this.shapeTargets[phase.toIdx];
-    const t = this.smoothstep(phase.t);
+    const t = phase.t;
     const enterTr = to.enterTransition;
     const fromActive = from.activeCount;
     const toActive = to.activeCount;

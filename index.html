@@ -13,28 +13,31 @@
   <div id="canvas-container" class="fixed inset-0 -z-10"></div>
 
   <!-- Fixed text overlays (화면 중앙 고정, fade in/out) -->
-  <div class="shape-section hidden fixed inset-0 z-10 flex items-center justify-center pointer-events-none px-4" data-index="0" data-sub-boundary="0.2">
-    <div class="shape-content text-center opacity-0 absolute w-full max-w-md" data-sub="0">
+  <div class="shape-section hidden fixed inset-0 z-10 flex items-center justify-center pointer-events-none px-4" data-index="0">
+    <div class="shape-content text-center opacity-0 absolute w-full max-w-md">
       <div class="mb-3 md:mb-4 inline-block rounded-full px-4 py-2 text-xs md:text-sm font-medium bg-white/10 text-white/80">01</div>
       <h2 class="mb-3 md:mb-4 text-3xl font-bold sm:text-5xl md:text-7xl">원</h2>
       <p class="text-base md:text-xl text-white/70">완벽한 대칭의 구</p>
     </div>
-    <div class="shape-content text-center opacity-0 absolute w-full max-w-md" data-sub="1">
+  </div>
+
+  <div class="shape-section hidden fixed inset-0 z-10 flex items-center justify-center pointer-events-none px-4" data-index="1">
+    <div class="shape-content text-center opacity-0 absolute w-full max-w-md">
       <div class="mb-3 md:mb-4 inline-block rounded-full px-4 py-2 text-xs md:text-sm font-medium bg-white/10 text-white/80">02</div>
       <h2 class="mb-3 md:mb-4 text-3xl font-bold sm:text-5xl md:text-7xl">위성</h2>
       <p class="text-base md:text-xl text-white/70">궤도를 도는 위성</p>
     </div>
   </div>
 
-  <div class="shape-section hidden fixed inset-0 z-10 flex items-center justify-center pointer-events-none px-4" data-index="1">
+  <div class="shape-section hidden fixed inset-0 z-10 flex items-center justify-center pointer-events-none px-4" data-index="2">
     <div class="shape-content text-center opacity-0 absolute w-full max-w-md">
       <div class="mb-3 md:mb-4 inline-block rounded-full px-4 py-2 text-xs md:text-sm font-medium bg-white/10 text-white/80">03</div>
       <h2 class="mb-3 md:mb-4 text-3xl font-bold sm:text-5xl md:text-7xl">Gyro</h2>
-      <p class="text-base md:text-xl text-white/70">회전하는 자이로</p>
+      <p class="text-base md:text-xl text-white/70"></p>
     </div>
   </div>
 
-  <div class="shape-section hidden fixed inset-0 z-10 flex items-center justify-center pointer-events-none px-4" data-index="2">
+  <div class="shape-section hidden fixed inset-0 z-10 flex items-center justify-center pointer-events-none px-4" data-index="3">
     <div class="shape-content text-center opacity-0 absolute w-full max-w-md">
       <div class="mb-3 md:mb-4 inline-block rounded-full px-4 py-2 text-xs md:text-sm font-medium bg-white/10 text-white/80">04</div>
       <h2 class="mb-3 md:mb-4 text-3xl font-bold sm:text-5xl md:text-7xl">Model2</h2>
@@ -42,7 +45,7 @@
     </div>
   </div>
 
-  <div class="shape-section hidden fixed inset-0 z-10 flex items-center justify-center pointer-events-none px-4" data-index="3">
+  <div class="shape-section hidden fixed inset-0 z-10 flex items-center justify-center pointer-events-none px-4" data-index="4">
     <div class="shape-content text-center opacity-0 absolute w-full max-w-md">
       <div class="mb-3 md:mb-4 inline-block rounded-full px-4 py-2 text-xs md:text-sm font-medium bg-white/10 text-white/80">05</div>
       <h2 class="mb-3 md:mb-4 text-3xl font-bold sm:text-5xl md:text-7xl">Circle</h2>
@@ -50,41 +53,17 @@
     </div>
   </div>
 
-  <div class="shape-section hidden fixed inset-0 z-10 flex items-center justify-center pointer-events-none px-4" data-index="4">
-    <div class="shape-content text-center opacity-0 absolute w-full max-w-md">
-      <div class="mb-3 md:mb-4 inline-block rounded-full px-4 py-2 text-xs md:text-sm font-medium bg-white/10 text-white/80">06</div>
-      <h2 class="mb-3 md:mb-4 text-3xl font-bold sm:text-5xl md:text-7xl">LineSphere</h2>
-      <p class="text-base md:text-xl text-white/70"></p>
-    </div>
-  </div>
-
   <div class="shape-section hidden fixed inset-0 z-10 flex items-center justify-center pointer-events-none px-4" data-index="5">
     <div class="shape-content text-center opacity-0 absolute w-full max-w-md">
-      <div class="mb-3 md:mb-4 inline-block rounded-full px-4 py-2 text-xs md:text-sm font-medium bg-white/10 text-white/80">07</div>
+      <div class="mb-3 md:mb-4 inline-block rounded-full px-4 py-2 text-xs md:text-sm font-medium bg-white/10 text-white/80">06</div>
       <h2 class="mb-3 md:mb-4 text-3xl font-bold sm:text-5xl md:text-7xl">LineSphere4</h2>
-      <p class="text-base md:text-xl text-white/70"></p>
-    </div>
-  </div>
-
-  <div class="shape-section hidden fixed inset-0 z-10 flex items-center justify-center pointer-events-none px-4" data-index="6">
-    <div class="shape-content text-center opacity-0 absolute w-full max-w-md">
-      <div class="mb-3 md:mb-4 inline-block rounded-full px-4 py-2 text-xs md:text-sm font-medium bg-white/10 text-white/80">08</div>
-      <h2 class="mb-3 md:mb-4 text-3xl font-bold sm:text-5xl md:text-7xl">Twist</h2>
-      <p class="text-base md:text-xl text-white/70"></p>
-    </div>
-  </div>
-
-  <div class="shape-section hidden fixed inset-0 z-10 flex items-center justify-center pointer-events-none px-4" data-index="7">
-    <div class="shape-content text-center opacity-0 absolute w-full max-w-md">
-      <div class="mb-3 md:mb-4 inline-block rounded-full px-4 py-2 text-xs md:text-sm font-medium bg-white/10 text-white/80">09</div>
-      <h2 class="mb-3 md:mb-4 text-3xl font-bold sm:text-5xl md:text-7xl">TwistBar</h2>
       <p class="text-base md:text-xl text-white/70"></p>
     </div>
   </div>
 
 
   <!-- Scroll spacer (스크롤 높이 확보) -->
-  <div id="content" style="height: 1900vh;"></div>
+  <div id="content" style="height: 1700vh;"></div>
 
 
   <!-- Scroll Progress Indicator (숨김) -->
